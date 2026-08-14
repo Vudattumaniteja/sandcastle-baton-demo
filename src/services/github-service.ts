@@ -14,11 +14,15 @@ export interface GitHubServiceOptions {
   executor?: CommandExecutor;
 }
 
-export const defaultExecutor: CommandExecutor = async (file, args, options) => {
-  const result = await execa(file, args, options);
+export const defaultExecutor: CommandExecutor = async (file, args, options = {}) => {
+  const { signal, ...rest } = (options || {}) as any;
+  const result = await execa(file, args, {
+    ...rest,
+    ...(signal ? { cancelSignal: signal } : {}),
+  });
   return {
-    stdout: result.stdout,
-    stderr: result.stderr,
+    stdout: result.stdout ?? '',
+    stderr: result.stderr ?? '',
     exitCode: result.exitCode ?? 0,
   };
 };

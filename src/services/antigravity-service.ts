@@ -12,20 +12,22 @@ import type {
 } from '../types/antigravity.js';
 
 export const defaultAgyExecutor: AgyCommandExecutor = async (file, args, options = {}) => {
+  const { signal, onStdout, onStderr, ...execaOptions } = options;
   const subprocess = execa(file, args, {
-    ...options,
+    ...execaOptions,
+    ...(signal ? { cancelSignal: signal } : {}),
     killDescendants: true,
   });
 
-  if (options.onStdout && subprocess.stdout) {
+  if (onStdout && subprocess.stdout) {
     subprocess.stdout.on('data', (chunk: Buffer | string) => {
-      options.onStdout(chunk.toString());
+      onStdout(chunk.toString());
     });
   }
 
-  if (options.onStderr && subprocess.stderr) {
+  if (onStderr && subprocess.stderr) {
     subprocess.stderr.on('data', (chunk: Buffer | string) => {
-      options.onStderr(chunk.toString());
+      onStderr(chunk.toString());
     });
   }
 
@@ -39,36 +41,146 @@ export const defaultAgyExecutor: AgyCommandExecutor = async (file, args, options
 
 export const FALLBACK_MODELS: ModelInfo[] = [
   {
-    id: 'gemini-3.7-flash-thinking',
-    name: 'gemini-3.7-flash-thinking',
-    aliases: ['flash-thinking', '3.7-flash-thinking'],
+    id: 'Gemini 3.7 Flash',
+    name: 'Gemini 3.7 Flash',
+    aliases: ['3.7-flash', 'flash', 'gemini-3.7-flash', 'default'],
     isDefault: true,
   },
   {
-    id: 'gemini-3.7-flash',
-    name: 'gemini-3.7-flash',
-    aliases: ['flash', '3.7-flash'],
+    id: 'Gemini 3.1 Pro',
+    name: 'Gemini 3.1 Pro',
+    aliases: ['3.1-pro', 'pro', 'gemini-3.1-pro'],
     isDefault: false,
   },
   {
-    id: 'gemini-3.7-pro',
-    name: 'gemini-3.7-pro',
-    aliases: ['pro', '3.7-pro'],
+    id: 'Gemini 3.6 Flash',
+    name: 'Gemini 3.6 Flash',
+    aliases: ['3.6-flash', 'gemini-3.6-flash'],
     isDefault: false,
   },
   {
-    id: 'gemini-2.5-flash',
-    name: 'gemini-2.5-flash',
-    aliases: ['2.5-flash'],
+    id: 'Gemini 3.5 Flash',
+    name: 'Gemini 3.5 Flash',
+    aliases: ['3.5-flash', 'gemini-3.5-flash'],
     isDefault: false,
   },
   {
-    id: 'gemini-2.5-pro',
-    name: 'gemini-2.5-pro',
-    aliases: ['2.5-pro'],
+    id: 'Claude Sonnet 4.6 (Thinking)',
+    name: 'Claude Sonnet 4.6 (Thinking)',
+    aliases: ['claude-sonnet', 'sonnet', 'claude-3.7-sonnet'],
+    isDefault: false,
+  },
+  {
+    id: 'Claude Opus 4.6 (Thinking)',
+    name: 'Claude Opus 4.6 (Thinking)',
+    aliases: ['claude-opus', 'opus'],
+    isDefault: false,
+  },
+  {
+    id: 'GPT-OSS 120B (Medium)',
+    name: 'GPT-OSS 120B (Medium)',
+    aliases: ['gpt-oss', 'gpt-120b'],
     isDefault: false,
   },
 ];
+
+/**
+ * Normalizes any model identifier or alias into an exact agy-recognized model name.
+ */
+export function resolveAgyModel(modelName?: string, effort?: string): string {
+  if (!modelName) {
+    if (effort === 'medium') return 'Gemini 3.7 Flash (Medium)';
+    if (effort === 'low') return 'Gemini 3.7 Flash (Low)';
+    return 'Gemini 3.7 Flash (High)';
+  }
+
+  const trimmed = modelName.trim();
+
+  // If already exact model with parenthesized effort/mode, check if it needs effort override or return as is
+  if (/\([^)]+\)$/.test(trimmed)) {
+    if (
+      effort &&
+      (trimmed.startsWith('Gemini 3.7 Flash') ||
+        trimmed.startsWith('Gemini 3.6 Flash') ||
+        trimmed.startsWith('Gemini 3.5 Flash'))
+    ) {
+      const prefix = trimmed.replace(/\s*\([^)]+\)$/, '');
+      const eff =
+        effort === 'low' ? 'Low' : effort === 'medium' ? 'Medium' : 'High';
+      return `${prefix} (${eff})`;
+    }
+    if (effort && trimmed.startsWith('Gemini 3.1 Pro')) {
+      const eff = effort === 'low' ? 'Low' : 'High';
+      return `Gemini 3.1 Pro (${eff})`;
+    }
+    return trimmed;
+  }
+
+  const lower = trimmed.toLowerCase();
+
+  if (
+    (lower.includes('3.7') && lower.includes('flash')) ||
+    lower === 'flash' ||
+    lower === 'gemini-3.7-flash' ||
+    lower === 'default'
+  ) {
+    const eff =
+      effort === 'low' ? 'Low' : effort === 'medium' ? 'Medium' : 'High';
+    return `Gemini 3.7 Flash (${eff})`;
+  }
+  if (
+    (lower.includes('3.6') && lower.includes('flash')) ||
+    lower === '3.6-flash' ||
+    lower === 'gemini-3.6-flash'
+  ) {
+    const eff =
+      effort === 'low' ? 'Low' : effort === 'medium' ? 'Medium' : 'High';
+    return `Gemini 3.6 Flash (${eff})`;
+  }
+  if (
+    (lower.includes('3.5') && lower.includes('flash')) ||
+    lower === '3.5-flash' ||
+    lower === 'gemini-3.5-flash'
+  ) {
+    const eff =
+      effort === 'low' ? 'Low' : effort === 'medium' ? 'Medium' : 'High';
+    return `Gemini 3.5 Flash (${eff})`;
+  }
+  if (
+    (lower.includes('3.1') && lower.includes('pro')) ||
+    lower === 'pro' ||
+    lower === 'gemini-3.1-pro' ||
+    lower === 'gemini-pro'
+  ) {
+    const eff = effort === 'low' ? 'Low' : 'High';
+    return `Gemini 3.1 Pro (${eff})`;
+  }
+  if (
+    lower.includes('sonnet') ||
+    lower.includes('claude-3.7') ||
+    lower.includes('claude-sonnet')
+  ) {
+    return 'Claude Sonnet 4.6 (Thinking)';
+  }
+  if (lower.includes('opus') || lower.includes('claude-opus')) {
+    return 'Claude Opus 4.6 (Thinking)';
+  }
+  if (lower.includes('gpt') || lower.includes('120b')) {
+    return 'GPT-OSS 120B (Medium)';
+  }
+
+  // Check alias match from FALLBACK_MODELS
+  for (const m of FALLBACK_MODELS) {
+    if (
+      m.id.toLowerCase() === lower ||
+      m.aliases?.some((a) => a.toLowerCase() === lower)
+    ) {
+      return m.id;
+    }
+  }
+
+  return trimmed;
+}
 
 export class AntigravityService {
   private customAgyPath: string;
@@ -102,15 +214,24 @@ export class AntigravityService {
   /**
    * Discovers available local Antigravity models and aliases.
    */
-  async discoverModels(): Promise<ModelInfo[]> {
+  async discoverModels(timeoutMs: number = 2500): Promise<ModelInfo[]> {
     try {
-      const { stdout } = await this.executor(this.customAgyPath, ['models'], {});
-      const models = this.parseModelsOutput(stdout);
-      if (models.length > 0) {
-        return models;
+      const abortController = new AbortController();
+      const timer = setTimeout(() => abortController.abort(), timeoutMs);
+
+      try {
+        const { stdout } = await this.executor(this.customAgyPath, ['models'], {
+          signal: abortController.signal,
+        });
+        const models = this.parseModelsOutput(stdout);
+        if (models.length > 0) {
+          return models;
+        }
+      } finally {
+        clearTimeout(timer);
       }
     } catch {
-      // Fallback on error
+      // Fallback on error or timeout
     }
 
     return [...FALLBACK_MODELS];
@@ -136,24 +257,41 @@ export class AntigravityService {
       }
     }
 
+    let inAvailableBlock = false;
+
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed.startsWith('-')) continue;
+      if (!trimmed) continue;
 
-      // Format: - <id> (alias: <a1>, <a2>)
-      const modelMatch = trimmed.match(/^-\s*([^\s(]+)(?:\s*\((?:alias:\s*)?([^)]+)\))?/i);
-      if (modelMatch && modelMatch[1]) {
-        const id = modelMatch[1].trim();
-        const rawAliases = modelMatch[2] ? modelMatch[2].replace(/^alias:\s*/i, '').trim() : '';
-        const aliases = rawAliases
-          ? rawAliases.split(',').map((a) => a.trim()).filter(Boolean)
-          : [];
+      if (trimmed.toLowerCase().startsWith('available models:')) {
+        inAvailableBlock = true;
+        continue;
+      }
 
+      // Format 1: - <id> (alias: <a1>, <a2>)
+      if (trimmed.startsWith('-')) {
+        const modelMatch = trimmed.match(/^-\s*([^\s(]+)(?:\s*\((?:alias:\s*)?([^)]+)\))?/i);
+        if (modelMatch && modelMatch[1]) {
+          const id = modelMatch[1].trim();
+          const rawAliases = modelMatch[2] ? modelMatch[2].replace(/^alias:\s*/i, '').trim() : '';
+          const aliases = rawAliases
+            ? rawAliases.split(',').map((a) => a.trim()).filter(Boolean)
+            : [];
+
+          models.push({
+            id,
+            name: id,
+            aliases: aliases.length > 0 ? aliases : undefined,
+            isDefault: defaultModelId ? id === defaultModelId : id === 'Gemini 3.7 Flash (High)',
+          });
+        }
+      } else if (inAvailableBlock && (trimmed.startsWith('Gemini') || trimmed.startsWith('Claude') || trimmed.startsWith('GPT'))) {
+        // Format 2: Indented model names from agy
+        const id = trimmed;
         models.push({
           id,
           name: id,
-          aliases: aliases.length > 0 ? aliases : undefined,
-          isDefault: defaultModelId ? id === defaultModelId : false,
+          isDefault: id === 'Gemini 3.7 Flash (High)',
         });
       }
     }
@@ -165,20 +303,34 @@ export class AntigravityService {
    * Reads live state and quota from `last_statusline_input.json`.
    */
   async getStatuslineSnapshot(): Promise<StatuslineSnapshot | null> {
-    try {
-      const appDir = this.getAppDataDir();
-      const statuslineFile = path.join(appDir, 'last_statusline_input.json');
-      if (!fs.existsSync(statuslineFile)) {
-        return null;
+    const candidateDirs: string[] = [];
+    if (this.appDataDir) {
+      candidateDirs.push(this.appDataDir);
+    } else {
+      if (process.env.GEMINI_APP_DIR) {
+        candidateDirs.push(process.env.GEMINI_APP_DIR);
       }
-      const raw = fs.readFileSync(statuslineFile, 'utf-8');
-      if (!raw || !raw.trim()) {
-        return null;
-      }
-      return JSON.parse(raw) as StatuslineSnapshot;
-    } catch {
-      return null;
+      const home = os.homedir();
+      candidateDirs.push(path.join(home, '.gemini', 'antigravity-cli'));
+      candidateDirs.push(path.join(home, '.gemini', 'antigravity'));
+      candidateDirs.push(path.join(home, '.antigravity'));
     }
+
+    for (const dir of candidateDirs) {
+      try {
+        const statuslineFile = path.join(dir, 'last_statusline_input.json');
+        if (fs.existsSync(statuslineFile)) {
+          const raw = fs.readFileSync(statuslineFile, 'utf-8');
+          if (raw && raw.trim()) {
+            return JSON.parse(raw) as StatuslineSnapshot;
+          }
+        }
+      } catch {
+        // Continue checking other candidates
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -205,13 +357,8 @@ export class AntigravityService {
     const timeout = typeof options.timeout === 'number' ? `${Math.round(options.timeout / 60000)}m` : options.timeout ?? '30m';
     args.push('--print-timeout', timeout);
 
-    if (options.reasoningEffort) {
-      args.push('--effort', options.reasoningEffort);
-    }
-
-    if (options.model) {
-      args.push('--model', options.model);
-    }
+    const resolvedModel = resolveAgyModel(options.model, options.reasoningEffort);
+    args.push('--model', resolvedModel);
 
     const prompt = options.prompt ?? this.buildWorkerPrompt(options.repo, options.issueNumber);
     args.push('--prompt', prompt);

@@ -9,13 +9,11 @@ describe('AntigravityService', () => {
   describe('Model Discovery', () => {
     it('should parse models and aliases from agy models CLI output', async () => {
       const mockOutput = `Available models:
-- gemini-3.7-flash (alias: flash, 3.7-flash)
-- gemini-3.7-flash-thinking (alias: flash-thinking, 3.7-flash-thinking)
-- gemini-3.7-pro (alias: pro, 3.7-pro)
-- gemini-2.5-flash (alias: 2.5-flash)
-- gemini-2.5-pro (alias: 2.5-pro)
-
-Default model: gemini-3.7-flash-thinking
+  Gemini 3.7 Flash (High)
+  Gemini 3.7 Flash (Medium)
+  Gemini 3.7 Flash (Low)
+  Gemini 3.1 Pro (High)
+  Claude Sonnet 4.6 (Thinking)
 `;
       const mockExecutor = vi.fn().mockResolvedValue({
         stdout: mockOutput,
@@ -28,15 +26,8 @@ Default model: gemini-3.7-flash-thinking
 
       expect(models).toHaveLength(5);
       expect(models[0]).toEqual({
-        id: 'gemini-3.7-flash',
-        name: 'gemini-3.7-flash',
-        aliases: ['flash', '3.7-flash'],
-        isDefault: false,
-      });
-      expect(models[1]).toEqual({
-        id: 'gemini-3.7-flash-thinking',
-        name: 'gemini-3.7-flash-thinking',
-        aliases: ['flash-thinking', '3.7-flash-thinking'],
+        id: 'Gemini 3.7 Flash (High)',
+        name: 'Gemini 3.7 Flash (High)',
         isDefault: true,
       });
       expect(mockExecutor).toHaveBeenCalledWith('agy', ['models'], expect.any(Object));
@@ -48,7 +39,27 @@ Default model: gemini-3.7-flash-thinking
       const models = await service.discoverModels();
 
       expect(models.length).toBeGreaterThan(0);
-      expect(models.some((m) => m.id === 'gemini-3.7-flash-thinking')).toBe(true);
+      expect(models.some((m) => m.id === 'Gemini 3.7 Flash')).toBe(true);
+    });
+
+    it('should fallback gracefully when discoverModels times out', async () => {
+      const mockExecutor = vi.fn().mockImplementation((_cmd, _args, opts) => {
+        return new Promise((_resolve, reject) => {
+          if (opts.signal) {
+            opts.signal.addEventListener('abort', () => {
+              const err: any = new Error('The operation was aborted');
+              err.name = 'AbortError';
+              reject(err);
+            });
+          }
+        });
+      });
+
+      const service = new AntigravityService({ executor: mockExecutor });
+      const models = await service.discoverModels(50); // 50ms timeout
+
+      expect(models.length).toBeGreaterThan(0);
+      expect(models[0].id).toBe('Gemini 3.7 Flash');
     });
 
     it('should read statusline snapshot from last_statusline_input.json', async () => {
@@ -59,8 +70,8 @@ Default model: gemini-3.7-flash-thinking
         session_id: 'session-123',
         conversation_id: 'conv-456',
         model: {
-          id: 'gemini-3.7-flash',
-          display_name: 'Gemini 3.7 Flash',
+          id: 'Gemini 3.7 Flash (High)',
+          display_name: 'Gemini 3.7 Flash (High)',
           effort: 'high',
         },
         context_window: {
@@ -87,7 +98,7 @@ Default model: gemini-3.7-flash-thinking
 
       expect(snapshot).not.toBeNull();
       expect(snapshot?.session_id).toBe('session-123');
-      expect(snapshot?.model?.id).toBe('gemini-3.7-flash');
+      expect(snapshot?.model?.id).toBe('Gemini 3.7 Flash (High)');
       expect(snapshot?.quota?.['gemini-5h']?.remaining_fraction).toBe(0.85);
 
       fs.rmSync(tempDir, { recursive: true, force: true });
@@ -101,12 +112,12 @@ Default model: gemini-3.7-flash-thinking
   });
 
   describe('Worker Execution Arguments', () => {
-    it('should construct correct CLI args for worker execution', () => {
+    it('should construct correct CLI args for worker execution with resolved model', () => {
       const service = new AntigravityService();
       const options: AntigravityWorkerOptions = {
         repo: 'owner/repo',
         issueNumber: 42,
-        model: 'gemini-3.7-pro',
+        model: 'gemini-3.1-pro',
         reasoningEffort: 'high',
         timeout: '15m',
       };
@@ -116,10 +127,8 @@ Default model: gemini-3.7-flash-thinking
       expect(args).toContain('--dangerously-skip-permissions');
       expect(args).toContain('--print-timeout');
       expect(args[args.indexOf('--print-timeout') + 1]).toBe('15m');
-      expect(args).toContain('--effort');
-      expect(args[args.indexOf('--effort') + 1]).toBe('high');
       expect(args).toContain('--model');
-      expect(args[args.indexOf('--model') + 1]).toBe('gemini-3.7-pro');
+      expect(args[args.indexOf('--model') + 1]).toBe('Gemini 3.1 Pro (High)');
       expect(args).toContain('--prompt');
       const promptIdx = args.indexOf('--prompt');
       expect(args[promptIdx + 1]).toContain('Repository: owner/repo');
@@ -185,6 +194,17 @@ Default model: gemini-3.7-flash-thinking
       });
 
       expect(stdoutChunks).toEqual(['chunk 1\n', 'chunk 2\n']);
+    });
+
+    it('should map signal option to cancelSignal for execa without throwing', async () => {
+      const { defaultAgyExecutor } = await import('../src/services/antigravity-service.js');
+      const controller = new AbortController();
+      // Test running a simple command with signal attached
+      const result = await defaultAgyExecutor('node', ['-e', 'console.log("hello")'], {
+        signal: controller.signal,
+      });
+      expect(result.stdout.trim()).toBe('hello');
+      expect(result.exitCode).toBe(0);
     });
   });
 });

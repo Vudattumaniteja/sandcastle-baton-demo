@@ -324,7 +324,7 @@ export class WatchMonitor {
 
     // Resource, Token & Quota Bar
     lines.push('');
-    const modelName = statusline?.model?.id || 'gemini-3.7-flash-thinking';
+    const modelName = statusline?.model?.id || 'Gemini 3.7 Flash (High)';
     let quotaInfo = '';
     if (statusline?.quota) {
       const defaultQuota = Object.values(statusline.quota)[0];

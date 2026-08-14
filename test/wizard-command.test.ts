@@ -77,12 +77,12 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
 
     mockAntigravityService = {
       discoverModels: vi.fn().mockResolvedValue([
-        { id: 'gemini-3.7-flash-thinking', name: 'gemini-3.7-flash-thinking', isDefault: true },
-        { id: 'gemini-3.7-pro', name: 'gemini-3.7-pro', isDefault: false },
+        { id: 'Gemini 3.7 Flash (High)', name: 'Gemini 3.7 Flash (High)', isDefault: true },
+        { id: 'Gemini 3.1 Pro (High)', name: 'Gemini 3.1 Pro (High)', isDefault: false },
       ]),
       getStatuslineSnapshot: vi.fn().mockResolvedValue({
         quota: {
-          'gemini-3.7-flash-thinking': {
+          'Gemini 3.7 Flash (High)': {
             remaining_fraction: 1.0,
             reset_in_seconds: 0,
           },
@@ -148,7 +148,7 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
           repo: 'owner/repo',
           mode: 'afk',
           issues: [26],
-          model: 'gemini-3.7-flash-thinking',
+          model: 'Gemini 3.7 Flash (High)',
         });
         runnerEvents.emit('baton:gating', {
           issueNumber: 26,
@@ -220,14 +220,14 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
   it('should run full guided wizard flow and execute baton successfully', async () => {
     // Select answers:
     // 1. Issue: 26
-    // 2. Model: 'gemini-3.7-flash-thinking'
+    // 2. Model: 'Gemini 3.7 Flash (High)'
     // 3. Effort: 'high'
     // 4. Mode: 'afk'
     // 5. Confirm manifest: true
     mockPrompts.select = vi
       .fn()
       .mockResolvedValueOnce(26)
-      .mockResolvedValueOnce('gemini-3.7-flash-thinking')
+      .mockResolvedValueOnce('Gemini 3.7 Flash (High)')
       .mockResolvedValueOnce('high')
       .mockResolvedValueOnce('afk');
 
@@ -307,7 +307,7 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
 
     expect(result.cancelled).toBe(false);
     expect(result.success).toBe(true);
-    expect(result.manifest?.model).toBe('gemini-3.7-flash-thinking');
+    expect(result.manifest?.model).toBe('Gemini 3.7 Flash (High)');
     expect(result.manifest?.reasoningEffort).toBe('high');
     expect(result.manifest?.mode).toBe('afk');
   });
@@ -316,7 +316,7 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
     mockPrompts.select = vi
       .fn()
       .mockResolvedValueOnce('all')
-      .mockResolvedValueOnce('gemini-3.7-flash-thinking')
+      .mockResolvedValueOnce('Gemini 3.7 Flash (High)')
       .mockResolvedValueOnce('high')
       .mockResolvedValueOnce('afk');
 
@@ -416,7 +416,7 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
     mockPrompts.select = vi
       .fn()
       .mockResolvedValueOnce(26)
-      .mockResolvedValueOnce('gemini-3.7-flash-thinking')
+      .mockResolvedValueOnce('Gemini 3.7 Flash (High)')
       .mockResolvedValueOnce('high')
       .mockResolvedValueOnce('afk');
 
@@ -444,7 +444,7 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
     mockPrompts.select = vi
       .fn()
       .mockResolvedValueOnce(26)
-      .mockResolvedValueOnce('gemini-3.7-flash-thinking')
+      .mockResolvedValueOnce('Gemini 3.7 Flash (High)')
       .mockResolvedValueOnce('high')
       .mockResolvedValueOnce('afk');
 

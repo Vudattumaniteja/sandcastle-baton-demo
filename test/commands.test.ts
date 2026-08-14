@@ -113,7 +113,7 @@ describe('POSIX Headless Commands (doctor, status, config, run)', () => {
         get: vi.fn().mockReturnValue('gemini-3.7-flash'),
         set: vi.fn(),
         list: vi.fn().mockReturnValue({
-          defaults: { model: 'gemini-3.7-flash-thinking' },
+          defaults: { model: 'Gemini 3.7 Flash' },
           local: { model: 'gemini-3.7-flash' },
           resolved: { model: 'gemini-3.7-flash' },
         }),

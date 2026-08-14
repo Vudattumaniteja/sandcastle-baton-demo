@@ -67,13 +67,38 @@ export function formatModelOption(
   let resetHint = '';
 
   if (snapshot?.quota) {
-    const quotaEntry =
+    // 1. Direct match on model ID or aliases
+    let quotaEntry =
       snapshot.quota[model.id] ||
       (model.aliases
         ? model.aliases
             .map((alias) => snapshot.quota?.[alias])
             .find(Boolean)
         : undefined);
+
+    // 2. Pool-based resolution for Antigravity quota pools
+    if (!quotaEntry) {
+      const lowerId = model.id.toLowerCase();
+      if (
+        lowerId.startsWith('gemini') ||
+        lowerId.includes('flash') ||
+        lowerId.includes('pro')
+      ) {
+        quotaEntry =
+          snapshot.quota['gemini-5h'] ||
+          snapshot.quota['gemini-weekly'] ||
+          snapshot.quota['gemini'];
+      } else if (
+        lowerId.startsWith('claude') ||
+        lowerId.startsWith('gpt') ||
+        lowerId.startsWith('3p')
+      ) {
+        quotaEntry =
+          snapshot.quota['3p-5h'] ||
+          snapshot.quota['3p-weekly'] ||
+          snapshot.quota['3p'];
+      }
+    }
 
     if (quotaEntry && typeof quotaEntry.remaining_fraction === 'number') {
       const pct = Math.round(quotaEntry.remaining_fraction * 100);

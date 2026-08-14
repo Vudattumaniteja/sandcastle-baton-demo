@@ -2,7 +2,10 @@ import * as clack from '@clack/prompts';
 import pc from 'picocolors';
 import { BatonRunner } from '../core/baton-runner.js';
 import { GitHubService } from '../services/github-service.js';
-import { AntigravityService } from '../services/antigravity-service.js';
+import {
+  AntigravityService,
+  resolveAgyModel,
+} from '../services/antigravity-service.js';
 import { DoctorService } from '../services/doctor-service.js';
 import { ConfigService } from '../services/config-service.js';
 import { GatingEvaluator } from '../core/gating-evaluator.js';
@@ -151,11 +154,12 @@ export async function wizardCommand(
   }
 
   // 5. Reasoning Effort Selection
+  const initialEffort = (configService.get('reasoningEffort') || 'high') as 'high' | 'medium' | 'low';
   const effortOptions = getReasoningEffortChoices();
   const selectedEffort = await prompts.select({
     message: 'Select reasoning effort level:',
     options: effortOptions,
-    initialValue: 'high',
+    initialValue: initialEffort,
   });
 
   if (prompts.isCancel(selectedEffort)) {
@@ -186,11 +190,16 @@ export async function wizardCommand(
     branch = branchMatch[1].trim();
   }
 
+  const resolvedModel = resolveAgyModel(
+    String(selectedModel),
+    selectedEffort as any
+  );
+
   const manifest: WizardManifest = {
     repo: targetRepo,
     branch,
     targetDescription,
-    model: String(selectedModel),
+    model: resolvedModel,
     reasoningEffort: selectedEffort as 'high' | 'medium' | 'low',
     mode: selectedMode as 'afk' | 'supervised' | 'dry-run',
     autoPr: true,

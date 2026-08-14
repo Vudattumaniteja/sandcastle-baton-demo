@@ -112,14 +112,14 @@ describe('UI Formatters & Badges (Variant A TUI Flow)', () => {
   describe('formatModelOption', () => {
     it('should format model with default badge', () => {
       const model: ModelInfo = {
-        id: 'gemini-3.7-flash-thinking',
-        name: 'gemini-3.7-flash-thinking',
+        id: 'Gemini 3.7 Flash (High)',
+        name: 'Gemini 3.7 Flash (High)',
         isDefault: true,
       };
 
       const option = formatModelOption(model, null);
-      expect(option.value).toBe('gemini-3.7-flash-thinking');
-      expect(option.label).toContain('gemini-3.7-flash-thinking');
+      expect(option.value).toBe('Gemini 3.7 Flash (High)');
+      expect(option.label).toContain('Gemini 3.7 Flash (High)');
       expect(option.label).toContain('[Default]');
     });
 
@@ -143,6 +143,28 @@ describe('UI Formatters & Badges (Variant A TUI Flow)', () => {
       expect(option.value).toBe('gemini-3.7-pro');
       expect(option.label).toContain('75% quota');
       expect(option.hint).toContain('Resets in 12m');
+    });
+
+    it('should match pooled quota like gemini-5h for Gemini models without exact model id key', () => {
+      const model: ModelInfo = {
+        id: 'Gemini 3.7 Flash (High)',
+        name: 'Gemini 3.7 Flash (High)',
+        isDefault: true,
+      };
+
+      const snapshot: StatuslineSnapshot = {
+        quota: {
+          'gemini-5h': {
+            remaining_fraction: 0.65,
+            reset_in_seconds: 8880,
+          },
+        },
+      };
+
+      const option = formatModelOption(model, snapshot);
+      expect(option.value).toBe('Gemini 3.7 Flash (High)');
+      expect(option.label).toContain('65% quota');
+      expect(option.hint).toContain('Resets in 148m');
     });
   });
 
@@ -176,7 +198,7 @@ describe('UI Formatters & Badges (Variant A TUI Flow)', () => {
         repo: 'owner/repo',
         branch: 'main',
         targetDescription: 'Issue #26: Interactive Guided Wizard',
-        model: 'gemini-3.7-flash-thinking',
+        model: 'Gemini 3.7 Flash (High)',
         reasoningEffort: 'high' as const,
         mode: 'afk' as const,
         autoPr: true,
@@ -191,7 +213,7 @@ describe('UI Formatters & Badges (Variant A TUI Flow)', () => {
       expect(summary).toContain('Target:');
       expect(summary).toContain('Issue #26');
       expect(summary).toContain('Model:');
-      expect(summary).toContain('gemini-3.7-flash-thinking');
+      expect(summary).toContain('Gemini 3.7 Flash (High)');
       expect(summary).toContain('Reasoning:');
       expect(summary).toContain('High');
       expect(summary).toContain('Mode:');
