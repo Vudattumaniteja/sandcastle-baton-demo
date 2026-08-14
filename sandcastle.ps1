@@ -91,7 +91,7 @@ while ($issuesProcessed -lt $MaxIssues) {
         continue
     }
 
-    Write-Host "[+] Found Open Issue #$currentIssue: '$title'" -ForegroundColor Cyan
+    Write-Host "[+] Found Open Issue #$currentIssue - '$title'" -ForegroundColor Cyan
 
     # Check Gating Labels
     $hasReady = $labelNames -contains "ready-for-agent"
