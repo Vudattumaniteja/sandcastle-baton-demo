@@ -30,11 +30,24 @@ The mandatory step sequence executed by each worker:
 6. **Merge**: Merge PR via `gh pr merge --merge` (or squash according to repo conventions).
 7. **Issue Closure**: Close the issue with `gh issue close <N>` and an audit summary comment.
 
+### Sandcastle CLI (`sandcastle` / `sc`)
+The global cross-platform TypeScript command-line tool. Provides both an interactive terminal wizard and headless execution modes for driving sequential Antigravity (`agy`) batons in any repository.
+
+### Interactive Wizard Mode
+The default experience when `sandcastle` is run without arguments in a Git workspace. Guides the user through repository confirmation, pre-flight auth checks, open issue browsing/selection, runner options, and live execution display.
+
+### Headless Mode
+Non-interactive CLI execution (e.g. `sandcastle run --repo owner/repo --start 1`) accepting arguments directly for scriptability, scheduled runs, and automated pipelines.
+
+### Antigravity Runner
+The dedicated execution driver that spawns isolated Google Antigravity (`agy`) CLI sub-processes with configurable model, timeout, and permission flags.
+
 ---
 
 ## File Structure
 
-- `sandcastle.ps1`: The PowerShell CLI orchestrator script for headless baton runs.
+- `src/`: TypeScript source code for the global Sandcastle CLI.
+- `sandcastle.ps1`: Legacy PowerShell CLI orchestrator script for headless baton runs.
 - `SKILL.md`: Root copy of the Sandcastle agent skill.
 - `.agents/skills/sandcastle/`: Discoverable Antigravity skill directory.
 - `docs/agents/`: Configuration for Matt Pocock engineering skills (issue tracker, triage labels, domain docs).
