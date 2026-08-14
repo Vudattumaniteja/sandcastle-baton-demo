@@ -1,11 +1,99 @@
 import { Command } from 'commander';
+import { runCommand } from '../commands/run.js';
+import { statusCommand } from '../commands/status.js';
+import { doctorCommand } from '../commands/doctor.js';
+import {
+  configGetCommand,
+  configSetCommand,
+  configListCommand,
+} from '../commands/config.js';
 
 const program = new Command();
 
 program
   .name('sandcastle')
-  .description('Autonomous, sequential GitHub issue baton orchestrator for AI coding agents')
-  .version(__SANDCASTLE_VERSION__, '-v, --version', 'Output the current version')
+  .description(
+    'Autonomous, sequential GitHub issue baton orchestrator for AI coding agents'
+  )
+  .version(
+    typeof __SANDCASTLE_VERSION__ !== 'undefined'
+      ? __SANDCASTLE_VERSION__
+      : '0.1.0',
+    '-v, --version',
+    'Output the current version'
+  )
   .helpOption('-h, --help', 'Display help for command');
+
+// 1. run command
+program
+  .command('run [issue]')
+  .description('Run an autonomous issue baton loop')
+  .option('-a, --all', 'Process all open ready issues in backlog sequentially')
+  .option('-m, --model <name>', 'LLM model to use for Antigravity workers')
+  .option(
+    '-e, --effort <low|medium|high>',
+    'Reasoning effort level (low, medium, high)'
+  )
+  .option(
+    '--mode <afk|supervised|dry-run>',
+    'Execution mode (afk, supervised, dry-run)',
+    'afk'
+  )
+  .option('-t, --timeout <duration>', 'Timeout per issue (e.g. 30m)')
+  .option('--retries <N>', 'Max retry attempts per issue', '2')
+  .option('--auto-pr', 'Automatically create Pull Request upon verified tests', true)
+  .option('--auto-merge', 'Automatically merge Pull Request upon creation', true)
+  .option('--json', 'Output structured JSON format')
+  .option('--quiet', 'Suppress non-essential progress output')
+  .action(async (issue, options) => {
+    await runCommand(issue, options);
+  });
+
+// 2. status command
+program
+  .command('status')
+  .description('Display status snapshot of current or latest baton execution')
+  .option('--json', 'Output raw JSON snapshot')
+  .action(async (options) => {
+    await statusCommand(options);
+  });
+
+// 3. doctor command
+program
+  .command('doctor')
+  .description('Validate workspace health, toolchain, and gate requirements')
+  .option('--json', 'Output structured diagnostic JSON report')
+  .action(async (options) => {
+    await doctorCommand(options);
+  });
+
+// 4. config command
+const configCmd = program
+  .command('config')
+  .description('Manage Sandcastle 3-tier configuration');
+
+configCmd
+  .command('get <key>')
+  .description('Get the effective value of a configuration key')
+  .option('--json', 'Output in JSON format')
+  .action((key, options) => {
+    configGetCommand(key, options);
+  });
+
+configCmd
+  .command('set <key> <value>')
+  .description('Set a configuration key in local or global config')
+  .option('-g, --global', 'Set globally in ~/.sandcastle/config.json')
+  .action((key, value, options) => {
+    configSetCommand(key, value, options);
+  });
+
+configCmd
+  .command('list')
+  .description('List configurations across all tiers (defaults, global, local, resolved)')
+  .option('--json', 'Output in JSON format')
+  .action((options) => {
+    configListCommand(options);
+  });
 
 program.parse(process.argv);
