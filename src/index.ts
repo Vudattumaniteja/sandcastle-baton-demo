@@ -14,3 +14,7 @@ export interface SandcastleOptions {
   model?: string;
   reasoningEffort?: 'high' | 'medium' | 'low';
 }
+
+export * from './types/index.js';
+export * from './services/github-service.js';
+export * from './core/gating-evaluator.js';
