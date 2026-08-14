@@ -199,3 +199,150 @@ describe('TaskVault Tagging Support', () => {
     assert.equal(vault.has('expired'), false);
   });
 });
+
+describe('TaskVault Audit Hash Chain', () => {
+  test('should initialize with empty audit log and valid integrity', () => {
+    const vault = new TaskVault();
+    assert.deepEqual(vault.getAuditLog(), []);
+    const integrity = vault.verifyIntegrity();
+    assert.deepEqual(integrity, { valid: true, count: 0 });
+  });
+
+  test('should append valid audit blocks for SET, DELETE, and CLEAR mutations', () => {
+    const vault = new TaskVault();
+    vault.set('item:1', { title: 'First item' }, { tags: ['work'] });
+    vault.delete('item:1');
+    vault.clear();
+
+    const log = vault.getAuditLog();
+    assert.equal(log.length, 3);
+
+    // Block 0: SET
+    assert.equal(log[0].index, 0);
+    assert.equal(typeof log[0].timestamp, 'number');
+    assert.equal(log[0].action, 'SET');
+    assert.equal(log[0].key, 'item:1');
+    assert.equal(log[0].prevHash, '0'.repeat(64));
+    assert.match(log[0].payloadHash, /^[0-9a-f]{64}$/);
+    assert.match(log[0].hash, /^[0-9a-f]{64}$/);
+
+    // Block 1: DELETE
+    assert.equal(log[1].index, 1);
+    assert.equal(log[1].action, 'DELETE');
+    assert.equal(log[1].key, 'item:1');
+    assert.equal(log[1].prevHash, log[0].hash);
+    assert.match(log[1].hash, /^[0-9a-f]{64}$/);
+
+    // Block 2: CLEAR
+    assert.equal(log[2].index, 2);
+    assert.equal(log[2].action, 'CLEAR');
+    assert.equal(log[2].key, null);
+    assert.equal(log[2].prevHash, log[1].hash);
+    assert.match(log[2].hash, /^[0-9a-f]{64}$/);
+
+    // Integrity check
+    const integrity = vault.verifyIntegrity();
+    assert.deepEqual(integrity, { valid: true, count: 3 });
+  });
+
+  test('should return a defensive copy from getAuditLog()', () => {
+    const vault = new TaskVault();
+    vault.set('k', 'v');
+    const log = vault.getAuditLog();
+    log[0].action = 'TAMPERED';
+
+    // Original audit log remains untouched
+    assert.equal(vault.getAuditLog()[0].action, 'SET');
+    assert.equal(vault.verifyIntegrity().valid, true);
+  });
+
+  test('should detect corruption when a block action is modified', () => {
+    const vault = new TaskVault();
+    vault.set('k1', 'v1');
+    vault.set('k2', 'v2');
+
+    // Simulate tampering in internal audit log
+    vault.auditLog[0].action = 'DELETE';
+    const result = vault.verifyIntegrity();
+    assert.equal(result.valid, false);
+    assert.equal(result.corruptedIndex, 0);
+    assert.match(result.error, /Hash mismatch at index 0/);
+  });
+
+  test('should detect corruption when a block key is modified', () => {
+    const vault = new TaskVault();
+    vault.set('k1', 'v1');
+    vault.set('k2', 'v2');
+
+    vault.auditLog[1].key = 'altered_key';
+    const result = vault.verifyIntegrity();
+    assert.equal(result.valid, false);
+    assert.equal(result.corruptedIndex, 1);
+    assert.match(result.error, /Hash mismatch at index 1/);
+  });
+
+  test('should detect corruption when a block payloadHash is modified', () => {
+    const vault = new TaskVault();
+    vault.set('k1', 'v1');
+
+    vault.auditLog[0].payloadHash = 'f'.repeat(64);
+    const result = vault.verifyIntegrity();
+    assert.equal(result.valid, false);
+    assert.equal(result.corruptedIndex, 0);
+    assert.match(result.error, /Hash mismatch at index 0/);
+  });
+
+  test('should detect corruption when prevHash linkage is broken', () => {
+    const vault = new TaskVault();
+    vault.set('k1', 'v1');
+    vault.set('k2', 'v2');
+
+    vault.auditLog[1].prevHash = 'a'.repeat(64);
+    const result = vault.verifyIntegrity();
+    assert.equal(result.valid, false);
+    assert.equal(result.corruptedIndex, 1);
+    assert.match(result.error, /Invalid prevHash at index 1/);
+  });
+
+  test('should detect corruption when block hash itself is modified', () => {
+    const vault = new TaskVault();
+    vault.set('k1', 'v1');
+
+    vault.auditLog[0].hash = '0'.repeat(64);
+    const result = vault.verifyIntegrity();
+    assert.equal(result.valid, false);
+    assert.equal(result.corruptedIndex, 0);
+    assert.match(result.error, /Hash mismatch at index 0/);
+  });
+
+  test('should detect corruption when block index is altered', () => {
+    const vault = new TaskVault();
+    vault.set('k1', 'v1');
+    vault.set('k2', 'v2');
+
+    vault.auditLog[1].index = 99;
+    const result = vault.verifyIntegrity();
+    assert.equal(result.valid, false);
+    assert.equal(result.corruptedIndex, 1);
+    assert.match(result.error, /Invalid index at position 1/);
+  });
+
+  test('should append DELETE audit block on lazy expired entry cleanup', async () => {
+    const vault = new TaskVault();
+    vault.set('temp', 'value', { ttlMs: 20 });
+    assert.equal(vault.getAuditLog().length, 1);
+
+    await new Promise((resolve) => setTimeout(resolve, 35));
+
+    // Access expired key triggers deletion
+    assert.equal(vault.get('temp'), null);
+
+    const log = vault.getAuditLog();
+    assert.equal(log.length, 2);
+    assert.equal(log[1].action, 'DELETE');
+    assert.equal(log[1].key, 'temp');
+
+    const integrity = vault.verifyIntegrity();
+    assert.deepEqual(integrity, { valid: true, count: 2 });
+  });
+});
