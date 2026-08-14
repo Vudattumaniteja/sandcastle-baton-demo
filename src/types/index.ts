@@ -2,3 +2,6 @@ export * from './github.js';
 export * from './gating.js';
 export * from './antigravity.js';
 export * from './supervisor.js';
+export * from './config.js';
+export * from './baton.js';
+export * from './doctor.js';
