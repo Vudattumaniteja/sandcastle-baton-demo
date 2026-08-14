@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sandcastle"
+  short_description: "Run a sequential GitHub issue baton."
+  default_prompt: "Use sandcastle skill on this GitHub repo issue and continue the issue baton."
