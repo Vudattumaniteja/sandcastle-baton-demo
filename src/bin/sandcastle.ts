@@ -3,6 +3,7 @@ import { runCommand } from '../commands/run.js';
 import { statusCommand } from '../commands/status.js';
 import { doctorCommand } from '../commands/doctor.js';
 import { wizardCommand } from '../commands/wizard.js';
+import { watchCommand } from '../commands/watch.js';
 import {
   configGetCommand,
   configSetCommand,
@@ -103,6 +104,20 @@ configCmd
   .option('--json', 'Output in JSON format')
   .action((options) => {
     configListCommand(options);
+  });
+
+// 5. watch command
+program
+  .command('watch')
+  .description('Live alternate-screen terminal monitor streaming agent transcripts and progress')
+  .option('-i, --interval <ms>', 'Refresh polling interval in milliseconds', '500')
+  .option('-f, --file <path>', 'Explicit transcript JSONL file path to stream')
+  .option('-s, --session <id>', 'Specific Antigravity session/conversation ID to attach to')
+  .option('--state <path>', 'Custom path to .sandcastle/run.json state file')
+  .option('--once', 'Render a single snapshot frame and exit')
+  .option('--json', 'Output live monitoring snapshot in JSON format')
+  .action(async (options) => {
+    await watchCommand(options);
   });
 
 // If no arguments provided in process.argv, check if interactive terminal (TTY)
