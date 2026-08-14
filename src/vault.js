@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 /**
- * Core TaskVault: In-memory key-value store with baseline operations, TTL support, tag filtering, and tamper-evident audit hash chain.
+ * Core TaskVault: In-memory key-value store with baseline operations, TTL support, tag filtering, tamper-evident audit hash chain, and snapshot export/import.
  */
 export class TaskVault {
   constructor() {
@@ -23,7 +23,7 @@ export class TaskVault {
   /**
    * Internal helper to create and append an audit block to the chain.
    * @private
-   * @param {'SET'|'DELETE'|'CLEAR'} action
+   * @param {'SET'|'DELETE'|'CLEAR'|'IMPORT'} action
    * @param {string|null} key
    * @param {any} payload
    * @returns {object}
@@ -221,11 +221,21 @@ export class TaskVault {
   /**
    * Verify the integrity of the audit log chain.
    * Traverses the entire audit log, recalculates hashes, and checks prevHash link consistency.
+   * @param {Array<object>} [customLog] - Optional audit log array to verify instead of internal log.
    * @returns {{ valid: boolean, count?: number, error?: string, corruptedIndex?: number }}
    */
-  verifyIntegrity() {
-    for (let i = 0; i < this.auditLog.length; i++) {
-      const block = this.auditLog[i];
+  verifyIntegrity(customLog = null) {
+    const log = Array.isArray(customLog) ? customLog : this.auditLog;
+    for (let i = 0; i < log.length; i++) {
+      const block = log[i];
+
+      if (!block || typeof block !== 'object') {
+        return {
+          valid: false,
+          error: `Invalid block at position ${i}`,
+          corruptedIndex: i,
+        };
+      }
 
       if (block.index !== i) {
         return {
@@ -235,7 +245,7 @@ export class TaskVault {
         };
       }
 
-      const expectedPrevHash = i === 0 ? '0'.repeat(64) : this.auditLog[i - 1].hash;
+      const expectedPrevHash = i === 0 ? '0'.repeat(64) : log[i - 1].hash;
       if (block.prevHash !== expectedPrevHash) {
         return {
           valid: false,
@@ -254,6 +264,131 @@ export class TaskVault {
       }
     }
 
-    return { valid: true, count: this.auditLog.length };
+    return { valid: true, count: log.length };
+  }
+
+  /**
+   * Export the entire vault state (active entries, tags, audit chain) as a JSON snapshot with SHA-256 root checksum.
+   * @returns {string} Serialized JSON snapshot string.
+   */
+  exportSnapshot() {
+    const version = '1.0.0';
+    const timestamp = Date.now();
+
+    const entries = [];
+    for (const [key, entry] of Array.from(this.store.entries())) {
+      if (this.isExpired(key)) {
+        this.delete(key);
+        continue;
+      }
+      const item = {
+        key,
+        value: entry.value,
+        tags: Array.isArray(entry.tags) ? [...entry.tags] : [],
+      };
+      if (typeof entry.expiresAt === 'number') {
+        item.expiresAt = entry.expiresAt;
+      }
+      entries.push(item);
+    }
+
+    const auditLog = this.getAuditLog();
+    const dataToHash = `${version}${JSON.stringify(entries)}${JSON.stringify(auditLog)}`;
+    const checksum = crypto.createHash('sha256').update(dataToHash).digest('hex');
+
+    const snapshot = {
+      version,
+      timestamp,
+      entries,
+      auditLog,
+      checksum,
+    };
+
+    return JSON.stringify(snapshot);
+  }
+
+  /**
+   * Restore the vault state from a serialized JSON snapshot, validating checksum and audit chain integrity.
+   * @param {string} jsonString - The JSON snapshot string to import.
+   * @returns {{ importedEntries: number, auditRecords: number }}
+   */
+  importSnapshot(jsonString) {
+    if (typeof jsonString !== 'string') {
+      throw new Error('Snapshot must be a valid JSON string');
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(jsonString);
+    } catch {
+      throw new Error('Invalid JSON snapshot format');
+    }
+
+    if (
+      !payload ||
+      typeof payload !== 'object' ||
+      typeof payload.version !== 'string' ||
+      typeof payload.timestamp !== 'number' ||
+      !Array.isArray(payload.entries) ||
+      !Array.isArray(payload.auditLog) ||
+      typeof payload.checksum !== 'string'
+    ) {
+      throw new Error('Invalid snapshot structure: missing required fields');
+    }
+
+    // Checksum verification
+    const dataToHash = `${payload.version}${JSON.stringify(payload.entries)}${JSON.stringify(payload.auditLog)}`;
+    const expectedChecksum = crypto.createHash('sha256').update(dataToHash).digest('hex');
+    if (payload.checksum !== expectedChecksum) {
+      throw new Error(`Snapshot checksum mismatch: expected ${expectedChecksum}, got ${payload.checksum}`);
+    }
+
+    // Verify incoming audit log integrity
+    const integrityResult = this.verifyIntegrity(payload.auditLog);
+    if (!integrityResult.valid) {
+      throw new Error(`Snapshot audit log integrity check failed: ${integrityResult.error}`);
+    }
+
+    // Restore internal store
+    this.store.clear();
+    let importedEntriesCount = 0;
+    for (const entry of payload.entries) {
+      if (!entry || typeof entry.key !== 'string') {
+        continue;
+      }
+      if (typeof entry.expiresAt === 'number' && Date.now() > entry.expiresAt) {
+        continue;
+      }
+      const tags = Array.isArray(entry.tags) ? [...entry.tags] : [];
+      const storeEntry = {
+        value: entry.value,
+        tags,
+        createdAt: Date.now(),
+        options: { tags },
+      };
+      if (typeof entry.expiresAt === 'number') {
+        storeEntry.expiresAt = entry.expiresAt;
+        storeEntry.options.ttlMs = Math.max(0, entry.expiresAt - Date.now());
+      }
+      this.store.set(entry.key, storeEntry);
+      importedEntriesCount++;
+    }
+
+    // Restore audit log
+    const auditRecordsCount = payload.auditLog.length;
+    this.auditLog = payload.auditLog.map((block) => ({ ...block }));
+
+    // Append IMPORT action block to the chain
+    this._appendAuditBlock('IMPORT', null, {
+      importedEntries: importedEntriesCount,
+      auditRecords: auditRecordsCount,
+      checksum: payload.checksum,
+      version: payload.version,
+    });
+
+    return {
+      importedEntries: importedEntriesCount,
+      auditRecords: auditRecordsCount,
+    };
   }
 }

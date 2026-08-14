@@ -1,5 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import { TaskVault } from './vault.js';
 
 describe('TaskVault Baseline', () => {
@@ -344,5 +345,178 @@ describe('TaskVault Audit Hash Chain', () => {
 
     const integrity = vault.verifyIntegrity();
     assert.deepEqual(integrity, { valid: true, count: 2 });
+  });
+});
+
+describe('TaskVault Snapshot Export & Import', () => {
+  test('should export snapshot with valid structure and root checksum', () => {
+    const vault = new TaskVault();
+    vault.set('key:1', { text: 'first' }, { tags: ['alpha'] });
+    vault.set('key:2', 'second', { tags: ['beta', 'gamma'] });
+
+    const snapshotJson = vault.exportSnapshot();
+    assert.equal(typeof snapshotJson, 'string');
+
+    const snapshot = JSON.parse(snapshotJson);
+    assert.equal(snapshot.version, '1.0.0');
+    assert.equal(typeof snapshot.timestamp, 'number');
+    assert.equal(snapshot.entries.length, 2);
+    assert.equal(snapshot.auditLog.length, 2);
+    assert.match(snapshot.checksum, /^[0-9a-f]{64}$/);
+
+    // Verify root checksum match
+    const expectedData = `${snapshot.version}${JSON.stringify(snapshot.entries)}${JSON.stringify(snapshot.auditLog)}`;
+    const expectedChecksum = crypto.createHash('sha256').update(expectedData).digest('hex');
+    assert.equal(snapshot.checksum, expectedChecksum);
+  });
+
+  test('exportSnapshot should purge expired entries before export', async () => {
+    const vault = new TaskVault();
+    vault.set('active', 'stays', { tags: ['keep'] });
+    vault.set('ephemeral', 'leaves', { tags: ['temp'], ttlMs: 20 });
+
+    await new Promise((resolve) => setTimeout(resolve, 35));
+
+    const snapshotJson = vault.exportSnapshot();
+    const snapshot = JSON.parse(snapshotJson);
+
+    assert.equal(snapshot.entries.length, 1);
+    assert.equal(snapshot.entries[0].key, 'active');
+    assert.equal(snapshot.entries[0].value, 'stays');
+    assert.deepEqual(snapshot.entries[0].tags, ['keep']);
+
+    // Ephemeral deletion was logged in auditLog before export
+    assert.equal(vault.has('ephemeral'), false);
+    const deleteBlock = snapshot.auditLog.find((b) => b.action === 'DELETE' && b.key === 'ephemeral');
+    assert.ok(deleteBlock);
+  });
+
+  test('should export -> clear -> import roundtrip restoring entries, tags, and audit chain', () => {
+    const vault = new TaskVault();
+    vault.set('user:101', { name: 'Alice', role: 'admin' }, { tags: ['auth', 'admin'] });
+    vault.set('config:timeout', 5000, { tags: ['settings'] });
+    vault.delete('config:timeout');
+    vault.set('doc:1', 'Important memo', { tags: ['docs'] });
+
+    const snapshotJson = vault.exportSnapshot();
+
+    // Clear the vault completely
+    vault.clear();
+    assert.equal(vault.size(), 0);
+
+    // Restore from snapshot
+    const result = vault.importSnapshot(snapshotJson);
+    assert.equal(result.importedEntries, 2);
+    assert.equal(result.auditRecords, 4);
+
+    // Verify restored store entries
+    assert.equal(vault.size(), 2);
+    assert.deepEqual(vault.get('user:101'), { name: 'Alice', role: 'admin' });
+    assert.deepEqual(vault.getTags('user:101'), ['auth', 'admin']);
+    assert.equal(vault.get('doc:1'), 'Important memo');
+    assert.deepEqual(vault.getTags('doc:1'), ['docs']);
+    assert.equal(vault.get('config:timeout'), null);
+
+    // Verify query operations work seamlessly on restored vault
+    const authEntries = vault.findByTag('auth');
+    assert.equal(authEntries.length, 1);
+    assert.deepEqual(authEntries[0], { key: 'user:101', value: { name: 'Alice', role: 'admin' } });
+
+    // Verify audit chain contains imported blocks + new IMPORT action block
+    const fullLog = vault.getAuditLog();
+    assert.equal(fullLog.length, 5); // 4 imported + 1 IMPORT block
+    assert.equal(fullLog[4].action, 'IMPORT');
+    assert.equal(fullLog[4].index, 4);
+    assert.equal(fullLog[4].prevHash, fullLog[3].hash);
+
+    // Chain integrity passes 100%
+    const integrity = vault.verifyIntegrity();
+    assert.deepEqual(integrity, { valid: true, count: 5 });
+  });
+
+  test('should reject invalid JSON input and missing required fields', () => {
+    const vault = new TaskVault();
+
+    assert.throws(() => vault.importSnapshot(null), /Snapshot must be a valid JSON string/);
+    assert.throws(() => vault.importSnapshot('not-json'), /Invalid JSON snapshot format/);
+    assert.throws(() => vault.importSnapshot('{}'), /Invalid snapshot structure: missing required fields/);
+    assert.throws(
+      () => vault.importSnapshot(JSON.stringify({ version: '1.0.0', entries: [] })),
+      /Invalid snapshot structure: missing required fields/
+    );
+  });
+
+  test('should reject snapshot with corrupted or altered checksum', () => {
+    const vault = new TaskVault();
+    vault.set('sec:1', 'confidential');
+    const snapshotJson = vault.exportSnapshot();
+    const snapshot = JSON.parse(snapshotJson);
+
+    // Corrupt the checksum string
+    snapshot.checksum = '0'.repeat(64);
+    assert.throws(
+      () => vault.importSnapshot(JSON.stringify(snapshot)),
+      /Snapshot checksum mismatch/
+    );
+
+    // Tamper with entries without recalculating checksum
+    const snapshot2 = JSON.parse(snapshotJson);
+    snapshot2.entries.push({ key: 'injected', value: 'malicious', tags: [] });
+    assert.throws(
+      () => vault.importSnapshot(JSON.stringify(snapshot2)),
+      /Snapshot checksum mismatch/
+    );
+  });
+
+  test('should reject snapshot with tampered audit log chain', () => {
+    const vault = new TaskVault();
+    vault.set('k1', 'v1');
+    vault.set('k2', 'v2');
+    const snapshotJson = vault.exportSnapshot();
+    const snapshot = JSON.parse(snapshotJson);
+
+    // Tamper with audit log block
+    snapshot.auditLog[0].action = 'DELETE';
+    // Recompute root checksum so checksum validation passes, but audit log integrity fails
+    const data = `${snapshot.version}${JSON.stringify(snapshot.entries)}${JSON.stringify(snapshot.auditLog)}`;
+    snapshot.checksum = crypto.createHash('sha256').update(data).digest('hex');
+
+    assert.throws(
+      () => vault.importSnapshot(JSON.stringify(snapshot)),
+      /Snapshot audit log integrity check failed/
+    );
+  });
+
+  test('should support end-to-end workflow: TTL, Tagging, Audit Chain, and Snapshot restore into a fresh vault', async () => {
+    const vault1 = new TaskVault();
+    vault1.set('persist:1', { data: 123 }, { tags: ['critical', 'v1'] });
+    vault1.set('persist:2', { data: 456 }, { tags: ['critical', 'v2'] });
+    vault1.set('temp:1', { temp: true }, { tags: ['cache'], ttlMs: 300 });
+
+    const exportedSnapshot = vault1.exportSnapshot();
+
+    // Create a fresh new vault and import
+    const vault2 = new TaskVault();
+    const importRes = vault2.importSnapshot(exportedSnapshot);
+
+    assert.equal(importRes.importedEntries, 3);
+    assert.equal(importRes.auditRecords, 3);
+    assert.equal(vault2.size(), 3);
+
+    // Perform new operations on imported vault
+    vault2.set('persist:3', { data: 789 }, { tags: ['critical', 'v3'] });
+    vault2.delete('persist:1');
+
+    const criticalItems = vault2.findByTag('critical');
+    assert.equal(criticalItems.length, 2);
+    assert.deepEqual(criticalItems, [
+      { key: 'persist:2', value: { data: 456 } },
+      { key: 'persist:3', value: { data: 789 } },
+    ]);
+
+    // Entire audit chain including import and subsequent mutations must be cryptographically valid
+    const integrity = vault2.verifyIntegrity();
+    assert.equal(integrity.valid, true);
+    assert.equal(integrity.count, 6); // 3 original + 1 IMPORT + 1 SET + 1 DELETE
   });
 });
