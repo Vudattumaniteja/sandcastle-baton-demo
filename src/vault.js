@@ -1,9 +1,53 @@
+import crypto from 'node:crypto';
+
 /**
- * Core TaskVault: In-memory key-value store with baseline operations, TTL support, and tag filtering.
+ * Core TaskVault: In-memory key-value store with baseline operations, TTL support, tag filtering, and tamper-evident audit hash chain.
  */
 export class TaskVault {
   constructor() {
     this.store = new Map();
+    this.auditLog = [];
+  }
+
+  /**
+   * Internal helper to compute SHA-256 hash for an audit block.
+   * @private
+   * @param {object} block
+   * @returns {string}
+   */
+  _calculateBlockHash(block) {
+    const data = `${block.index}${block.timestamp}${block.action}${block.key}${block.payloadHash}${block.prevHash}`;
+    return crypto.createHash('sha256').update(data).digest('hex');
+  }
+
+  /**
+   * Internal helper to create and append an audit block to the chain.
+   * @private
+   * @param {'SET'|'DELETE'|'CLEAR'} action
+   * @param {string|null} key
+   * @param {any} payload
+   * @returns {object}
+   */
+  _appendAuditBlock(action, key, payload) {
+    const previousBlock = this.auditLog.length > 0 ? this.auditLog[this.auditLog.length - 1] : null;
+    const index = this.auditLog.length;
+    const timestamp = Date.now();
+    const normalizedKey = key || null;
+    const payloadStr = JSON.stringify(payload === undefined ? null : payload);
+    const payloadHash = crypto.createHash('sha256').update(payloadStr).digest('hex');
+    const prevHash = previousBlock ? previousBlock.hash : '0'.repeat(64);
+    const block = {
+      index,
+      timestamp,
+      action,
+      key: normalizedKey,
+      payloadHash,
+      prevHash,
+      hash: '',
+    };
+    block.hash = this._calculateBlockHash(block);
+    this.auditLog.push(block);
+    return block;
   }
 
   /**
@@ -30,6 +74,7 @@ export class TaskVault {
       entry.expiresAt = Date.now() + options.ttlMs;
     }
     this.store.set(key, entry);
+    this._appendAuditBlock('SET', key, { value, options: { ...options, tags } });
     return true;
   }
 
@@ -84,7 +129,9 @@ export class TaskVault {
    * @returns {boolean}
    */
   delete(key) {
-    return this.store.delete(key);
+    const result = this.store.delete(key);
+    this._appendAuditBlock('DELETE', key, null);
+    return result;
   }
 
   /**
@@ -100,6 +147,7 @@ export class TaskVault {
    */
   clear() {
     this.store.clear();
+    this._appendAuditBlock('CLEAR', null, null);
   }
 
   /**
@@ -160,5 +208,52 @@ export class TaskVault {
     const entry = this.store.get(key);
     if (!entry) return [];
     return entry.tags ? [...entry.tags] : [];
+  }
+
+  /**
+   * Get a copy of the audit log chain.
+   * @returns {Array<object>}
+   */
+  getAuditLog() {
+    return this.auditLog.map((block) => ({ ...block }));
+  }
+
+  /**
+   * Verify the integrity of the audit log chain.
+   * Traverses the entire audit log, recalculates hashes, and checks prevHash link consistency.
+   * @returns {{ valid: boolean, count?: number, error?: string, corruptedIndex?: number }}
+   */
+  verifyIntegrity() {
+    for (let i = 0; i < this.auditLog.length; i++) {
+      const block = this.auditLog[i];
+
+      if (block.index !== i) {
+        return {
+          valid: false,
+          error: `Invalid index at position ${i}: expected ${i}, got ${block.index}`,
+          corruptedIndex: i,
+        };
+      }
+
+      const expectedPrevHash = i === 0 ? '0'.repeat(64) : this.auditLog[i - 1].hash;
+      if (block.prevHash !== expectedPrevHash) {
+        return {
+          valid: false,
+          error: `Invalid prevHash at index ${i}: expected ${expectedPrevHash}, got ${block.prevHash}`,
+          corruptedIndex: i,
+        };
+      }
+
+      const calculatedHash = this._calculateBlockHash(block);
+      if (block.hash !== calculatedHash) {
+        return {
+          valid: false,
+          error: `Hash mismatch at index ${i}: expected ${calculatedHash}, got ${block.hash}`,
+          corruptedIndex: i,
+        };
+      }
+    }
+
+    return { valid: true, count: this.auditLog.length };
   }
 }
