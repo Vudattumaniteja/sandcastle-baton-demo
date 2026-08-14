@@ -23,6 +23,8 @@ export * from './services/doctor-service.js';
 export * from './core/gating-evaluator.js';
 export * from './core/process-supervisor.js';
 export * from './core/baton-runner.js';
+export * from './ui/formatters.js';
+export * from './commands/wizard.js';
 export * from './commands/run.js';
 export * from './commands/status.js';
 export * from './commands/doctor.js';

@@ -5,3 +5,4 @@ export * from './supervisor.js';
 export * from './config.js';
 export * from './baton.js';
 export * from './doctor.js';
+export * from './wizard.js';

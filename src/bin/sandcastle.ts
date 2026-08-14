@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { runCommand } from '../commands/run.js';
 import { statusCommand } from '../commands/status.js';
 import { doctorCommand } from '../commands/doctor.js';
+import { wizardCommand } from '../commands/wizard.js';
 import {
   configGetCommand,
   configSetCommand,
@@ -23,6 +24,14 @@ program
     'Output the current version'
   )
   .helpOption('-h, --help', 'Display help for command');
+
+// 0. wizard command
+program
+  .command('wizard')
+  .description('Launch the interactive guided Sandcastle baton wizard')
+  .action(async () => {
+    await wizardCommand();
+  });
 
 // 1. run command
 program
@@ -96,4 +105,16 @@ configCmd
     configListCommand(options);
   });
 
-program.parse(process.argv);
+// If no arguments provided in process.argv, check if interactive terminal (TTY)
+if (process.argv.slice(2).length === 0) {
+  if (process.stdout.isTTY) {
+    wizardCommand().catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+  } else {
+    program.outputHelp();
+  }
+} else {
+  program.parse(process.argv);
+}
