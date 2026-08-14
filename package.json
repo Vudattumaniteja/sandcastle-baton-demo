@@ -1,0 +1,61 @@
+{
+  "name": "sandcastle",
+  "version": "0.1.0",
+  "description": "Autonomous, sequential GitHub issue baton orchestrator for AI coding agents",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "bin": {
+    "sandcastle": "./dist/bin/sandcastle.js",
+    "sc": "./dist/bin/sandcastle.js"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CONTEXT.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "build:verify": "node scripts/verify-build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepack": "npm run build && npm run build:verify"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.9.1",
+    "commander": "^13.1.0",
+    "execa": "^9.5.2",
+    "picocolors": "^1.1.1",
+    "sisteransi": "^1.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "tsup": "^8.3.6",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  },
+  "keywords": [
+    "sandcastle",
+    "baton",
+    "orchestrator",
+    "antigravity",
+    "subagent",
+    "ai-agent",
+    "autonomous-agent",
+    "github-issues"
+  ],
+  "author": "",
+  "license": "MIT"
+}
