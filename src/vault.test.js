@@ -114,3 +114,88 @@ describe('TaskVault TTL Support', () => {
     assert.equal(vault.get('key'), 'val2');
   });
 });
+
+describe('TaskVault Tagging Support', () => {
+  test('should default tags to empty array when omitted', () => {
+    const vault = new TaskVault();
+    vault.set('no-tags', 'value');
+    assert.deepEqual(vault.getTags('no-tags'), []);
+  });
+
+  test('should store and retrieve tags via getTags', () => {
+    const vault = new TaskVault();
+    vault.set('doc:1', { title: 'Doc 1' }, { tags: ['work', 'urgent'] });
+    assert.deepEqual(vault.getTags('doc:1'), ['work', 'urgent']);
+  });
+
+  test('should return empty array for getTags on non-existent or expired key', async () => {
+    const vault = new TaskVault();
+    assert.deepEqual(vault.getTags('nonexistent'), []);
+
+    vault.set('expiring', 'temp', { tags: ['temp-tag'], ttlMs: 20 });
+    assert.deepEqual(vault.getTags('expiring'), ['temp-tag']);
+
+    await new Promise((resolve) => setTimeout(resolve, 35));
+    assert.deepEqual(vault.getTags('expiring'), []);
+  });
+
+  test('should find entries by a single tag using findByTag', () => {
+    const vault = new TaskVault();
+    vault.set('task:1', 'Buy milk', { tags: ['groceries', 'personal'] });
+    vault.set('task:2', 'Fix bug', { tags: ['work', 'urgent'] });
+    vault.set('task:3', 'File taxes', { tags: ['personal', 'finance'] });
+
+    const personalTasks = vault.findByTag('personal');
+    assert.equal(personalTasks.length, 2);
+    assert.deepEqual(personalTasks, [
+      { key: 'task:1', value: 'Buy milk' },
+      { key: 'task:3', value: 'File taxes' },
+    ]);
+
+    const workTasks = vault.findByTag('work');
+    assert.deepEqual(workTasks, [{ key: 'task:2', value: 'Fix bug' }]);
+
+    const missing = vault.findByTag('missing');
+    assert.deepEqual(missing, []);
+  });
+
+  test('should find entries matching all specified tags using findByAllTags', () => {
+    const vault = new TaskVault();
+    vault.set('doc:1', 'A', { tags: ['project-x', 'frontend', 'draft'] });
+    vault.set('doc:2', 'B', { tags: ['project-x', 'backend'] });
+    vault.set('doc:3', 'C', { tags: ['project-x', 'frontend', 'final'] });
+
+    const frontendDocs = vault.findByAllTags(['project-x', 'frontend']);
+    assert.deepEqual(frontendDocs, [
+      { key: 'doc:1', value: 'A' },
+      { key: 'doc:3', value: 'C' },
+    ]);
+
+    const draftFrontend = vault.findByAllTags(['project-x', 'frontend', 'draft']);
+    assert.deepEqual(draftFrontend, [{ key: 'doc:1', value: 'A' }]);
+
+    const noMatches = vault.findByAllTags(['project-x', 'unknown']);
+    assert.deepEqual(noMatches, []);
+
+    assert.deepEqual(vault.findByAllTags([]), []);
+  });
+
+  test('should exclude and purge expired entries from tag queries', async () => {
+    const vault = new TaskVault();
+    vault.set('active', 'stays', { tags: ['report'] });
+    vault.set('expired', 'gone', { tags: ['report', 'temp'], ttlMs: 20 });
+
+    assert.equal(vault.findByTag('report').length, 2);
+
+    await new Promise((resolve) => setTimeout(resolve, 35));
+
+    const results = vault.findByTag('report');
+    assert.deepEqual(results, [{ key: 'active', value: 'stays' }]);
+
+    const allTagResults = vault.findByAllTags(['report', 'temp']);
+    assert.deepEqual(allTagResults, []);
+
+    // Expired entry should be cleaned up
+    assert.equal(vault.has('expired'), false);
+  });
+});
