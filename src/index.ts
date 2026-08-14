@@ -17,4 +17,6 @@ export interface SandcastleOptions {
 
 export * from './types/index.js';
 export * from './services/github-service.js';
+export * from './services/antigravity-service.js';
 export * from './core/gating-evaluator.js';
+export * from './core/process-supervisor.js';
