@@ -194,4 +194,16 @@ describe('POSIX Headless Commands (doctor, status, config, run)', () => {
       );
     });
   });
+
+  describe('watch command', () => {
+    it('should output json report when --json flag is passed', async () => {
+      const { watchCommand } = await import('../src/commands/watch.js');
+      await watchCommand({ json: true, cwd: tempDir, stateFilePath: runJsonPath });
+
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const output = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+      expect(output.status).toBe('idle');
+      expect(output.timestamp).toBeDefined();
+    });
+  });
 });

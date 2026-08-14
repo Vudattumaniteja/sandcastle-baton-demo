@@ -6,3 +6,5 @@ export * from './config.js';
 export * from './baton.js';
 export * from './doctor.js';
 export * from './wizard.js';
+export * from './transcript.js';
+export * from './watch.js';
