@@ -131,15 +131,36 @@ Every isolated worker session follows a strict 7-phase contract:
 
 ---
 
-## 📖 AI Agent & Developer Guides
+## 📖 Complete Documentation Index
 
-- **[AI Agent Guide: Authoring Issues & Working with Sandcastle](./docs/agents/issue-authoring.md)**: How AI agents should author atomic issues, structure acceptance criteria, manage triage labels, and fulfill the Worker Contract.
-- **[`CONTEXT.md`](./CONTEXT.md)**: Domain model and conceptual glossary.
-- **[`AGENTS.md`](./AGENTS.md)**: Agent guidelines and skill mappings.
-- **[`docs/agents/issue-tracker.md`](./docs/agents/issue-tracker.md)**: GitHub issue tracker operations via `gh` CLI.
-- **[`docs/agents/triage-labels.md`](./docs/agents/triage-labels.md)**: Canonical triage roles and label matrix.
-- **[`docs/adr/`](./docs/adr/)**: Architecture Decision Records.
-- **[`SESSION_SUMMARY.md`](./SESSION_SUMMARY.md)**: Real-world benchmark report and demonstration run.
+### 👤 User Guides
+- [**Getting Started Guide**](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/getting-started.md): Installation, prerequisites, and first baton run.
+- [**Interactive Wizard Walkthrough**](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/interactive-wizard.md): In-depth walkthrough of the interactive TUI wizard flow, badges, and phase spinners.
+- [**CLI Reference**](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/cli-reference.md): Complete reference for all CLI subcommands, flags, and JSON schemas.
+- [**Configuration Guide**](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/configuration.md): Managing defaults across local, global, and CLI tiers.
+
+### 🏛️ Architecture & Core Engine
+- [**System Architecture Overview**](file:///C:/Users/Manit/Desktop/sandcastle/docs/architecture/overview.md): System architecture diagram, modular layer breakdown, lifecycle flow, and process safety teardowns.
+- [**Baton Orchestrator Deep Dive**](file:///C:/Users/Manit/Desktop/sandcastle/docs/architecture/baton-orchestrator.md): Deep dive into `BatonRunner`, event-driven state machine, queue resolution, and snapshot persistence.
+- [**Gating and Safety Engine**](file:///C:/Users/Manit/Desktop/sandcastle/docs/architecture/gating-and-safety.md): Deep dive into `GatingEvaluator`, 4 Baton Gates, dependency regex parser, in-memory graph evaluation, and blocker protocols.
+- [**Process Supervision**](file:///C:/Users/Manit/Desktop/sandcastle/docs/architecture/process-supervision.md): Subprocess lifecycle management, dual-tier watchdog timeouts, HTTP 429 quota backoff, and retry loops with feedback injection.
+- [**Observability & Monitoring**](file:///C:/Users/Manit/Desktop/sandcastle/docs/architecture/observability.md): Deep dive into `TranscriptTailer` incremental JSONL poller and `WatchMonitor` alternate-screen TUI.
+
+### 🤖 AI Agent Guides
+- [**AI Agent Guide: Authoring Issues**](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/issue-authoring.md): How AI agents author atomic issues with checkable acceptance criteria and gate labels.
+- [**The Worker Contract**](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/worker-contract.md): Authoritative 7-phase execution protocol and blocker rules.
+- [**Antigravity CLI Interoperability**](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/antigravity-interop.md): Integration with Google Antigravity (`agy`), model resolution, and statusline quota tracking.
+- [**Canonical Triage Labels**](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/triage-labels.md): Five canonical triage roles and Sandcastle baton gating labels.
+- [**GitHub Issue Tracker Operations**](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/issue-tracker.md): Managing issues, backlogs, and comments via `gh` CLI.
+- [**Domain & Single-Context Architecture**](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/domain.md): Layout and maintenance of domain documentation (`CONTEXT.md` + `docs/adr/`).
+- [**`CONTEXT.md`**](file:///C:/Users/Manit/Desktop/sandcastle/CONTEXT.md): Domain model and conceptual glossary.
+- [**`AGENTS.md`**](file:///C:/Users/Manit/Desktop/sandcastle/AGENTS.md): Agent guidelines and skill mappings.
+
+### 💻 Developer Reference
+- [**Contributor Guide**](file:///C:/Users/Manit/Desktop/sandcastle/docs/developer/contributing.md): Development setup, bundling pipeline (`tsup`), test suites (`vitest`), and prepack verification (`verify-build.mjs`).
+- [**Programmatic API Reference**](file:///C:/Users/Manit/Desktop/sandcastle/docs/developer/programmatic-api.md): Importing Sandcastle as a TypeScript library, class interfaces, options, and code examples.
+- [**Architecture Decision Records (`docs/adr/`)**](file:///C:/Users/Manit/Desktop/sandcastle/docs/adr/): Recorded architectural decisions.
+- [**Real-World Demonstration Benchmark**](file:///C:/Users/Manit/Desktop/sandcastle/SESSION_SUMMARY.md): Benchmark report and autonomous multi-issue demonstration run.
 
 ---
 

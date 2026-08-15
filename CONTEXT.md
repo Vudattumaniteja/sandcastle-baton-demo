@@ -21,36 +21,39 @@ The safety prerequisites evaluated before any worker is launched:
 A strict halt policy. If an issue fails gating checks, if an agent encounters ambiguity, or if local verification fails, the issue is labelled `status blocked`, diagnostic details are commented, and the baton is halted immediately to protect repository integrity.
 
 ### Worker Contract
-The mandatory step sequence executed by each worker:
-1. **Read & Inspect**: Fetch issue body, requirements, and existing test suites.
-2. **Minimal Implementation**: Implement minimal code directly satisfying acceptance criteria.
-3. **Local Verification**: Run test suites, linting, and build commands until green.
-4. **Git Branch & Commit**: Create feature branch `issue-<N>-<desc>` and commit with conventional messages referencing `#<N>`.
-5. **Pull Request**: Open PR via `gh pr create`.
-6. **Merge**: Merge PR via `gh pr merge --merge` (or squash according to repo conventions).
-7. **Issue Closure**: Close the issue with `gh issue close <N>` and an audit summary comment.
+The mandatory step sequence executed by each worker: Inspect -> Minimal Implementation -> Local Verification -> Git Branch & Commit -> Pull Request -> Merge -> Issue Closure. See [`docs/agents/worker-contract.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/worker-contract.md) for the authoritative specification.
 
 ### Sandcastle CLI (`sandcastle` / `sc`)
-The global cross-platform TypeScript command-line tool. Provides both an interactive terminal wizard and headless execution modes for driving sequential Antigravity (`agy`) batons in any repository.
+The global cross-platform TypeScript command-line tool. Provides both an interactive terminal wizard and headless execution modes for driving sequential Antigravity (`agy`) batons in any repository. See [`docs/user/cli-reference.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/cli-reference.md).
 
 ### Interactive Wizard Mode
-The default experience when `sandcastle` is run without arguments in a Git workspace. Guides the user through repository confirmation, pre-flight auth checks, open issue browsing/selection, runner options, and live execution display.
+The default experience when `sandcastle` is run without arguments in a Git workspace. Guides the user through repository confirmation, pre-flight auth checks, open issue browsing/selection, runner options, and live execution display. See [`docs/user/interactive-wizard.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/interactive-wizard.md).
 
 ### Headless Mode
-Non-interactive CLI execution (e.g. `sandcastle run --repo owner/repo --start 1`) accepting arguments directly for scriptability, scheduled runs, and automated pipelines.
+Non-interactive CLI execution (e.g. `sandcastle run 42` or `sandcastle run --all`) accepting arguments directly for scriptability, scheduled runs, and automated pipelines. See [`docs/user/cli-reference.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/cli-reference.md).
 
-### Antigravity Runner
-The dedicated execution driver that spawns isolated Google Antigravity (`agy`) CLI sub-processes with configurable model, timeout, and permission flags.
+### Antigravity Runner & Interop
+The dedicated execution driver that spawns isolated Google Antigravity (`agy`) CLI sub-processes with configurable model, timeout, and permission flags, or dispatches in-session subagents via `invoke_subagent`. See [`docs/agents/antigravity-interop.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/antigravity-interop.md).
 
 ---
 
-## File Structure
+## File Structure & Documentation Index
 
 - `src/`: TypeScript source code for the global Sandcastle CLI.
-- `sandcastle.ps1`: Legacy PowerShell CLI orchestrator script for headless baton runs.
 - `SKILL.md`: Root copy of the Sandcastle agent skill.
 - `.agents/skills/sandcastle/`: Discoverable Antigravity skill directory.
-- `docs/agents/`: Configuration for Matt Pocock engineering skills (issue tracker, triage labels, domain docs).
+- `docs/user/`: User and Operator Documentation:
+  - [`getting-started.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/getting-started.md): Installation, prerequisites, and quickstart.
+  - [`interactive-wizard.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/interactive-wizard.md): Clack-powered TUI wizard and badge guide.
+  - [`cli-reference.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/cli-reference.md): Complete CLI commands, options, and JSON schemas.
+  - [`configuration.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/configuration.md): 4-tier configuration system and settings.
+- `docs/agents/`: AI Agent Protocols & Engineering Skills:
+  - [`worker-contract.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/worker-contract.md): 7-phase worker contract and blocker protocol.
+  - [`antigravity-interop.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/antigravity-interop.md): Antigravity model resolution, subagents, and quota tracking.
+  - [`issue-authoring.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/issue-authoring.md): Writing atomic, testable backlog issues.
+  - [`issue-tracker.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/issue-tracker.md): GitHub Issues interaction rules.
+  - [`triage-labels.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/triage-labels.md): Canonical triage roles and gating labels.
+  - [`domain.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/domain.md): Domain documentation consumption guidelines.
 - `docs/adr/`: Architecture Decision Records.
 - `CONTEXT.md`: This domain context and terminology map.
 - `AGENTS.md`: Agent behavior rules and skill mappings.

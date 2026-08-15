@@ -17,15 +17,36 @@ Single-context repo (standard for Sandcastle):
 ```
 /
 ├── CONTEXT.md
+├── AGENTS.md
+├── SKILL.md
 ├── docs/adr/
 │   └── 0001-powershell-and-subagent-baton-architecture.md
+├── docs/user/
+│   ├── getting-started.md
+│   ├── interactive-wizard.md
+│   ├── cli-reference.md
+│   └── configuration.md
 ├── docs/agents/
 │   ├── domain.md
+│   ├── worker-contract.md
+│   ├── antigravity-interop.md
+│   ├── issue-authoring.md
 │   ├── issue-tracker.md
 │   └── triage-labels.md
 ├── .agents/skills/sandcastle/
-└── sandcastle.ps1
+└── src/
 ```
+
+## Context Pointers
+
+| Guide | Description | Reached When |
+| :--- | :--- | :--- |
+| [getting-started.md](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/getting-started.md) | Quickstart, prerequisites, install, doctor. | Setting up Sandcastle environment. |
+| [interactive-wizard.md](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/interactive-wizard.md) | Clack-powered TUI wizard, badges, quota indicators, spinners. | Running interactive terminal workflows. |
+| [cli-reference.md](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/cli-reference.md) | Subcommands, options, exit codes, JSON schemas. | Automating headless baton executions. |
+| [configuration.md](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/configuration.md) | 4-tier configuration hierarchy and settings. | Persisting global or local configuration. |
+| [worker-contract.md](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/worker-contract.md) | Authoritative 7-phase worker lifecycle & blocker protocol. | Executing or auditing worker agent runs. |
+| [antigravity-interop.md](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/antigravity-interop.md) | Antigravity CLI, subagents, model resolution, quota pools. | Interfacing with Google Antigravity runtime. |
 
 ## Use the glossary's vocabulary
 
