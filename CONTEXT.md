@@ -32,6 +32,15 @@ The default experience when `sandcastle` is run without arguments in a Git works
 ### Headless Mode
 Non-interactive CLI execution (e.g. `sandcastle run 42` or `sandcastle run --all`) accepting arguments directly for scriptability, scheduled runs, and automated pipelines. See [`docs/user/cli-reference.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/cli-reference.md).
 
+### Execution Scope
+The bounding criteria determining which issues are targeted for execution: `all` (entire ready backlog), `from` (sequential backlog resumption from a start offset), or `only` (one or more isolated cherry-picked issues).
+
+### Sequential Resumption
+Execution mode starting from a specific issue offset (`--from <num>` or positional `sandcastle run <num>`) and advancing sequentially through subsequent open issues in ascending number order.
+
+### Single-Issue Execution
+Execution mode targeting an isolated ticket (`--only <num>`) or explicit cherry-picked list (`--only <num1,num2>`), halting immediately after processing without sweeping the remainder of the backlog.
+
 ### Antigravity Runner & Interop
 The dedicated execution driver that spawns isolated Google Antigravity (`agy`) CLI sub-processes with configurable model, timeout, and permission flags, or dispatches in-session subagents via `invoke_subagent`. See [`docs/agents/antigravity-interop.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/antigravity-interop.md).
 
