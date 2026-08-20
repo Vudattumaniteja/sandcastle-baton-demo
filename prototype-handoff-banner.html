@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sandcastle — Visual Baton Handoff Prototype (Issue #37)</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --cyan: #38bdf8;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --magenta: #d946ef;
+      --accent: #6366f1;
+      --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 120px 16px;
+    }
+
+    header {
+      max-width: 960px;
+      width: 100%;
+      margin-bottom: 24px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(99, 102, 241, 0.15);
+      color: #818cf8;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+      color: #ffffff;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .prototype-notice {
+      background: #1f1a10;
+      border: 1px solid #6e4b09;
+      color: #fce18b;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .main-container {
+      max-width: 960px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Scenario Bar */
+    .controls-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+    .controls-label {
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-right: 4px;
+    }
+
+    .scenario-btn {
+      background: #21262d;
+      border: 1px solid var(--surface-border);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .scenario-btn:hover {
+      background: #30363d;
+      border-color: #8b949e;
+    }
+
+    .scenario-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #ffffff;
+    }
+
+    .action-btn {
+      background: transparent;
+      border: 1px solid var(--surface-border);
+      color: var(--text-muted);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      margin-left: auto;
+    }
+    .action-btn:hover {
+      color: var(--text);
+      background: #21262d;
+    }
+
+    /* Terminal Window Container */
+    .terminal-window {
+      background: #090d13;
+      border: 1px solid var(--surface-border);
+      border-radius: 10px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      overflow: hidden;
+    }
+
+    .terminal-header {
+      background: #161b22;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--surface-border);
+    }
+
+    .window-buttons {
+      display: flex;
+      gap: 6px;
+    }
+
+    .win-btn {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .win-close { background: #ff5f56; }
+    .win-min { background: #ffbd2e; }
+    .win-max { background: #27c93f; }
+
+    .window-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .terminal-body {
+      padding: 24px;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* Variant Specific Rendering Components */
+    .c-green { color: var(--green); }
+    .c-cyan { color: var(--cyan); }
+    .c-yellow { color: var(--yellow); }
+    .c-red { color: var(--red); }
+    .c-magenta { color: var(--magenta); }
+    .c-dim { color: var(--text-muted); }
+    .c-bold { font-weight: 700; }
+
+    .box-card {
+      border: 1px solid;
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+    }
+    .box-green {
+      border-color: rgba(34, 197, 94, 0.4);
+      background: rgba(34, 197, 94, 0.04);
+    }
+    .box-cyan {
+      border-color: rgba(56, 189, 248, 0.4);
+      background: rgba(56, 189, 248, 0.04);
+    }
+    .box-hud {
+      border: 1px solid #30363d;
+      background: #11161d;
+    }
+
+    .grid-2col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* State Inspector */
+    .state-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      padding: 14px 18px;
+    }
+
+    .state-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    pre.state-dump {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #93c5fd;
+      background: #0a0d12;
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      max-height: 220px;
+    }
+
+    /* Floating Switcher Bar */
+    .prototype-switcher {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1f242c;
+      border: 1px solid #484f58;
+      border-radius: 9999px;
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+      z-index: 1000;
+    }
+
+    .nav-arrow {
+      background: #2b313a;
+      border: 1px solid #484f58;
+      color: #ffffff;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      transition: all 0.15s ease;
+    }
+    .nav-arrow:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .variant-label {
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 600;
+      color: #ffffff;
+      min-width: 220px;
+      text-align: center;
+    }
+
+    .variant-pills {
+      display: flex;
+      gap: 4px;
+    }
+
+    .v-pill {
+      background: #2b313a;
+      border: 1px solid #484f58;
+      color: var(--text-muted);
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .v-pill.active {
+      background: var(--cyan);
+      border-color: var(--cyan);
+      color: #000000;
+    }
+
+    .key-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge">SANDCASTLE PROTOTYPE • ISSUE #37</div>
+    <h1>Baton Handoff Banners & Transition Displays</h1>
+    <p class="subtitle">
+      Evaluating terminal layout, timing indicators, telemetry density, and next-candidate previews during sequential agent handoffs.
+    </p>
+    <div class="prototype-notice">
+      <span>⚠️ <strong>Throwaway Prototype:</strong> Three radically different layouts for Sandcastle CLI execution transitions. Use <code>?variant=A|B|C</code> or bottom bar arrows to switch.</span>
+    </div>
+  </header>
+
+  <div class="main-container">
+
+    <!-- Scenarios / Test Cases -->
+    <div class="controls-bar">
+      <span class="controls-label">Scenario:</span>
+      <button class="scenario-btn active" onclick="setScenario(0)">1. Standard Child (#36 ➔ #37)</button>
+      <button class="scenario-btn" onclick="setScenario(1)">2. Multi-Child Epic (#35 ➔ #36)</button>
+      <button class="scenario-btn" onclick="setScenario(2)">3. Blocked Gating Gate (#37 ➔ #38)</button>
+      <button class="action-btn" id="pauseBtn" onclick="togglePause()">⏸ Pause Countdown</button>
+    </div>
+
+    <!-- Terminal Mockup Window -->
+    <div class="terminal-window">
+      <div class="terminal-header">
+        <div class="window-buttons">
+          <span class="win-btn win-close"></span>
+          <span class="win-btn win-min"></span>
+          <span class="win-btn win-max"></span>
+        </div>
+        <div class="window-title">sandcastle run — 80x24 TTY</div>
+        <div style="width: 40px;"></div>
+      </div>
+      <div class="terminal-body" id="terminalOutput">
+        <!-- Rendered by JavaScript -->
+      </div>
+    </div>
+
+    <!-- Surface the State Panel -->
+    <div class="state-card">
+      <div class="state-title">
+        <span>Surfaced Prototype State (Live JSON)</span>
+        <span class="key-hint">Updates automatically on every action & switch</span>
+      </div>
+      <pre class="state-dump" id="stateDump"></pre>
+    </div>
+
+  </div>
+
+  <!-- Floating Switcher Bar (Required by UI Prototype Spec) -->
+  <div class="prototype-switcher">
+    <button class="nav-arrow" onclick="prevVariant()" title="Previous Variant (← arrow)">◀</button>
+    <div class="variant-label" id="variantDisplayLabel">Variant A — Relay Scorecard</div>
+    <div class="variant-pills">
+      <a class="v-pill" id="pill-A" href="javascript:setVariant('A')">A</a>
+      <a class="v-pill" id="pill-B" href="javascript:setVariant('B')">B</a>
+      <a class="v-pill" id="pill-C" href="javascript:setVariant('C')">C</a>
+    </div>
+    <button class="nav-arrow" onclick="nextVariant()" title="Next Variant (→ arrow)">▶</button>
+    <span class="key-hint">Press ← / →</span>
+  </div>
+
+  <script>
+    const VARIANTS = [
+      { key: 'A', name: 'A — Relay Scorecard (Boxed Ledger)' },
+      { key: 'B', name: 'B — Compact Stage Pipeline (Fast Stream)' },
+      { key: 'C', name: 'C — Split Telemetry HUD (2-Column)' },
+    ];
+
+    const SCENARIOS = [
+      {
+        name: 'Standard Sequential Child Execution (#36 -> #37)',
+        queueIndex: 2,
+        totalQueue: 5,
+        completed: {
+          number: 36,
+          title: 'CLI execution flags (--from, --only, --all) and wizard resumption flow',
+          durationMs: 42800,
+          prNumber: 12,
+          branchName: 'issue-36-cli-flags',
+          testsPassed: 14,
+          testsTotal: 14,
+          tokensUsed: 18450,
+          costUsd: 0.0038,
+          phaseBreakdown: { inspectMs: 3200, implementMs: 22100, testMs: 12500, gitPrMs: 5000 },
+        },
+        next: {
+          number: 37,
+          title: 'Visual baton handoff banners and transition display between iterations',
+          gatingStatus: 'READY',
+          labels: ['ready-for-agent', 'AFK', 'wayfinder:prototype'],
+          parentIssue: {
+            number: 34,
+            title: 'Map: Sandcastle Flow, Guardrails, Sequential Resumption & Prompt Customization',
+            childIndex: 3,
+            totalChildren: 5,
+          },
+          model: 'gemini-3.7-flash',
+          reasoningEffort: 'high',
+          acceptanceCriteria: [
+            { text: '3 distinct layout variants switchable via URL/CLI', done: true },
+            { text: 'Timing breakdown and countdown pacing indicator', done: true },
+            { text: 'Interactive CLI simulation switcher', done: false },
+          ],
+          estimatedDurationSeconds: 45,
+        }
+      },
+      {
+        name: 'Multi-Child Map Milestone (#35 -> #36)',
+        queueIndex: 1,
+        totalQueue: 5,
+        completed: {
+          number: 35,
+          title: 'Parent issue label conventions and queue skip status evaluation',
+          durationMs: 38200,
+          prNumber: 11,
+          branchName: 'issue-35-parent-labels',
+          testsPassed: 18,
+          testsTotal: 18,
+          tokensUsed: 14200,
+          costUsd: 0.0029,
+          phaseBreakdown: { inspectMs: 4100, implementMs: 18500, testMs: 11200, gitPrMs: 4400 },
+        },
+        next: {
+          number: 36,
+          title: 'CLI execution flags (--from, --only, --all) and wizard resumption flow',
+          gatingStatus: 'READY',
+          labels: ['ready-for-agent', 'AFK'],
+          parentIssue: {
+            number: 34,
+            title: 'Map: Sandcastle Flow, Guardrails, Sequential Resumption',
+            childIndex: 2,
+            totalChildren: 5,
+          },
+          model: 'gemini-3.7-flash',
+          reasoningEffort: 'high',
+          acceptanceCriteria: [
+            { text: '--from <num> starting index', done: true },
+            { text: '--only <issues...> cherry-picking', done: true },
+            { text: 'Zero-arg wizard resumption prompt', done: true },
+          ],
+          estimatedDurationSeconds: 50,
+        }
+      },
+      {
+        name: 'Gated / Blocked Candidate Transition (#37 -> #38)',
+        queueIndex: 3,
+        totalQueue: 5,
+        completed: {
+          number: 37,
+          title: 'Visual baton handoff banners and transition display',
+          durationMs: 44100,
+          prNumber: 13,
+          branchName: 'issue-37-handoff-banner',
+          testsPassed: 20,
+          testsTotal: 20,
+          tokensUsed: 19100,
+          costUsd: 0.0039,
+          phaseBreakdown: { inspectMs: 3500, implementMs: 24000, testMs: 11500, gitPrMs: 5100 },
+        },
+        next: {
+          number: 38,
+          title: 'Dynamic per-issue prompt overrides via issue comments',
+          gatingStatus: 'WAITING',
+          labels: ['ready-for-agent'],
+          parentIssue: {
+            number: 34,
+            title: 'Map: Sandcastle Flow, Guardrails',
+            childIndex: 4,
+            totalChildren: 5,
+          },
+          model: 'gemini-3.7-flash',
+          reasoningEffort: 'high',
+          acceptanceCriteria: [
+            { text: 'Parse markdown comments for prompt overrides', done: false },
+            { text: 'Fallback to default worker contract if absent', done: false },
+          ],
+          estimatedDurationSeconds: 60,
+        }
+      }
+    ];
+
+    let currentScenarioIndex = 0;
+    let currentVariant = 'A';
+    let countdownSeconds = 3.0;
+    let isPaused = false;
+
+    function getVariantFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const v = params.get('variant');
+      return (v && ['A', 'B', 'C'].includes(v.toUpperCase())) ? v.toUpperCase() : 'A';
+    }
+
+    function setVariant(v) {
+      currentVariant = v;
+      const url = new URL(window.location);
+      url.searchParams.set('variant', v);
+      window.history.replaceState({}, '', url);
+      render();
+    }
+
+    function prevVariant() {
+      const idx = VARIANTS.findIndex(v => v.key === currentVariant);
+      const nextIdx = (idx - 1 + VARIANTS.length) % VARIANTS.length;
+      setVariant(VARIANTS[nextIdx].key);
+    }
+
+    function nextVariant() {
+      const idx = VARIANTS.findIndex(v => v.key === currentVariant);
+      const nextIdx = (idx + 1) % VARIANTS.length;
+      setVariant(VARIANTS[nextIdx].key);
+    }
+
+    function setScenario(idx) {
+      currentScenarioIndex = idx;
+      countdownSeconds = 3.0;
+      document.querySelectorAll('.scenario-btn').forEach((btn, i) => {
+        btn.classList.toggle('active', i === idx);
+      });
+      render();
+    }
+
+    function togglePause() {
+      isPaused = !isPaused;
+      document.getElementById('pauseBtn').textContent = isPaused ? '▶ Resume Countdown' : '⏸ Pause Countdown';
+      render();
+    }
+
+    function formatMs(ms) {
+      return (ms / 1000).toFixed(1) + 's';
+    }
+
+    /* VARIANT A: Boxed Ledger Card */
+    function renderVariantAHtml(state) {
+      const { completed, next, queueIndex, totalQueue, countdown, paused } = state;
+      const progressPct = Math.round((queueIndex / totalQueue) * 100);
+      const countDisplay = paused ? '<span class="c-yellow">[PAUSED]</span>' : `<span class="c-cyan">${countdown.toFixed(1)}s</span>`;
+
+      return `
+<div class="box-card box-green">
+  <div class="c-green c-bold">╔══ 🏁 BATON PASSED: Issue #${completed.number} (${queueIndex}/${totalQueue} complete) ══════════════════════════════════════╗</div>
+  <div class="c-bold" style="padding: 4px 0;">  ${completed.title}</div>
+  <div class="c-dim">  ──────────────────────────────────────────────────────────────────────────</div>
+  <div style="margin-top: 4px;">  <strong class="c-bold">Duration:</strong> ${formatMs(completed.durationMs)} <span class="c-dim">(Insp: ${formatMs(completed.phaseBreakdown.inspectMs)} | Impl: ${formatMs(completed.phaseBreakdown.implementMs)} | Test: ${formatMs(completed.phaseBreakdown.testMs)} | PR: ${formatMs(completed.phaseBreakdown.gitPrMs)})</span></div>
+  <div>  <strong class="c-bold">Artifacts:</strong> PR #${completed.prNumber} (<span class="c-green">merged</span>) • Branch: <span class="c-cyan">${completed.branchName}</span></div>
+  <div>  <strong class="c-bold">Quality:</strong>   <span class="c-green">✔ ${completed.testsPassed}/${completed.testsTotal} tests passed (100% green)</span> • ${completed.tokensUsed.toLocaleString()} tokens (<span class="c-yellow">$${completed.costUsd.toFixed(4)}</span>)</div>
+  <div class="c-green c-bold" style="margin-top: 4px;">╚══════════════════════════════════════════════════════════════════════════╝</div>
+</div>
+
+<div style="text-align: center; margin: 16px 0;">
+  <span class="c-dim">[#${completed.number} ✔]</span>
+  <span class="c-cyan"> ═══════════( 🏃 BATON IN FLIGHT )═══════════▶ </span>
+  <span class="c-yellow c-bold">[#${next.number} ⚙]</span>
+  <div style="margin-top: 6px; font-size: 13px;">
+    <strong>Queue Progress:</strong> <span class="c-cyan">${'█'.repeat(Math.round(progressPct / 5))}</span><span class="c-dim">${'░'.repeat(20 - Math.round(progressPct / 5))}</span> ${progressPct}% (${queueIndex}/${totalQueue})
+    &nbsp;&nbsp;│&nbsp;&nbsp;
+    <strong>Next Worker Spool:</strong> ${countDisplay}
+  </div>
+</div>
+
+<div class="box-card box-cyan">
+  <div class="c-cyan c-bold">┌── 🎯 NEXT BATON TARGET: Issue #${next.number} ────────────────────────────────────────┐</div>
+  <div style="margin: 6px 0;">
+    <span style="background: ${next.gatingStatus === 'READY' ? '#22c55e' : '#eab308'}; color: #000; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px;">${next.gatingStatus}</span>
+    <strong class="c-bold"> ${next.title}</strong>
+  </div>
+  ${next.parentIssue ? `<div class="c-dim">  <strong>Parent Map:</strong> #${next.parentIssue.number} (Child ${next.parentIssue.childIndex}/${next.parentIssue.totalChildren}) • ${next.parentIssue.title}</div>` : ''}
+  <div>  <strong>Engine:</strong>     ${next.model} (${next.reasoningEffort} reasoning) • Est: ~${next.estimatedDurationSeconds}s</div>
+  <div class="c-dim" style="margin-top: 6px;">  Criteria Preview:</div>
+  ${next.acceptanceCriteria.map(ac => `  <div>  ${ac.done ? '<span class="c-green">☑</span>' : '<span class="c-dim">☐</span>'} ${ac.text}</div>`).join('')}
+  <div class="c-cyan c-bold" style="margin-top: 6px;">└─────────────────────────────────────────────────────────────────────────┘</div>
+</div>
+<div class="c-dim" style="text-align: center; font-size: 12px;">Controls: [Space] Launch Now  │  [p] Pause/Resume  │  [s] Skip  │  [q] Abort</div>
+`;
+    }
+
+    /* VARIANT B: Compact Pipeline */
+    function renderVariantBHtml(state) {
+      const { completed, next, queueIndex, totalQueue, countdown, paused } = state;
+      const countDisplay = paused ? '<span class="c-yellow">PAUSED</span>' : `<span class="c-cyan">${countdown.toFixed(1)}s</span>`;
+
+      const qItems = [];
+      for (let i = 1; i <= totalQueue; i++) {
+        if (i < queueIndex) {
+          qItems.push(`<span class="c-green">[#${34 + i} ✔]</span>`);
+        } else if (i === queueIndex) {
+          qItems.push(`<span class="c-green c-bold">[#${completed.number} ✔]</span>`);
+        } else if (i === queueIndex + 1) {
+          qItems.push(`<span class="c-yellow c-bold">[#${next.number} ⚙ NEXT]</span>`);
+        } else {
+          qItems.push(`<span class="c-dim">[#${34 + i} ⏳]</span>`);
+        }
+      }
+
+      return `
+<div style="line-height: 1.8;">
+  <div><span class="c-green">✔</span> <strong class="c-bold">BATON COMPLETED: #${completed.number}</strong> "${completed.title}" <span class="c-dim">[${formatMs(completed.durationMs)} • PR #${completed.prNumber} merged • ${completed.testsPassed} tests green]</span></div>
+  <div style="margin: 8px 0;"><span class="c-dim">Pipeline:</span> ${qItems.join(' <span class="c-dim">──▶</span> ')} <span class="c-dim">(${queueIndex}/${totalQueue})</span></div>
+  <div style="margin: 8px 0;"><span class="c-cyan">>>></span> <strong class="c-bold">Transferring baton in ${countDisplay}...</strong> <span class="c-dim">[Space: Run now | s: Skip | q: Stop]</span></div>
+  <div style="margin-top: 12px;"><span class="c-magenta">↳ TARGET</span> <strong class="c-bold">#${next.number}</strong> "${next.title}" <span class="c-green">[${next.gatingStatus}]</span></div>
+  <div class="c-dim" style="padding-left: 18px;">${next.parentIssue ? `Parent #${next.parentIssue.number} (${next.parentIssue.childIndex}/${next.parentIssue.totalChildren}) • ` : ''}Model: ${next.model} (${next.reasoningEffort}) • Est: ~${next.estimatedDurationSeconds}s • 0 blockers</div>
+</div>
+`;
+    }
+
+    /* VARIANT C: Split HUD */
+    function renderVariantCHtml(state) {
+      const { completed, next, countdown, paused } = state;
+      const countDisplay = paused ? '<span class="c-yellow">PAUSED</span>' : `<span class="c-cyan">${countdown.toFixed(1)}s</span>`;
+
+      return `
+<div class="box-card box-hud">
+  <div class="c-bold" style="border-bottom: 1px solid #30363d; padding-bottom: 6px; margin-bottom: 10px;">
+    ┌─ 📊 Retrospective (#${completed.number} Completed) ────────┬─ 🎯 Pre-flight Readiness (#${next.number} Target) ─────┐
+  </div>
+  <div class="grid-2col">
+    <div>
+      <div><strong>Issue:</strong>    #${completed.number} (${formatMs(completed.durationMs)})</div>
+      <div><strong>Branch:</strong>   ${completed.branchName} (PR #${completed.prNumber})</div>
+      <div><strong>Quality:</strong>  <span class="c-green">${completed.testsPassed}/${completed.testsTotal} green</span> (${completed.tokensUsed.toLocaleString()} tok)</div>
+      <div style="margin-top: 8px; color: var(--text-muted); font-size: 12px;">Phase Breakdown:</div>
+      <div style="font-size: 12px;">  Inspect   <span class="c-cyan">■■■</span> ${formatMs(completed.phaseBreakdown.inspectMs)}</div>
+      <div style="font-size: 12px;">  Implement <span class="c-cyan">■■■■■■■■■■■■</span> ${formatMs(completed.phaseBreakdown.implementMs)}</div>
+      <div style="font-size: 12px;">  Verify    <span class="c-cyan">■■■■■■</span> ${formatMs(completed.phaseBreakdown.testMs)}</div>
+      <div style="font-size: 12px;">  Git/PR    <span class="c-cyan">■■</span> ${formatMs(completed.phaseBreakdown.gitPrMs)}</div>
+    </div>
+    <div>
+      <div><strong>Target:</strong>   #${next.number} <span class="c-green">[${next.gatingStatus}]</span></div>
+      <div><strong>Title:</strong>    ${next.title.substring(0, 36)}...</div>
+      <div><strong>Parent:</strong>   ${next.parentIssue ? `#${next.parentIssue.number} (Child ${next.parentIssue.childIndex}/${next.parentIssue.totalChildren})` : 'None'}</div>
+      <div><strong>Model:</strong>    ${next.model} (${next.reasoningEffort})</div>
+      <div><strong>Labels:</strong>   <span class="c-dim">${next.labels.join(', ')}</span></div>
+      <div style="margin-top: 8px; color: var(--text-muted); font-size: 12px;">Readiness Checks:</div>
+      <div style="font-size: 12px;"><span class="c-green">✔</span> Gating labels verified (ready-for-agent, AFK)</div>
+      <div style="font-size: 12px;"><span class="c-green">✔</span> 0 blocking parent dependencies</div>
+      <div style="font-size: 12px;"><span class="c-green">✔</span> Workspace clean (origin/main synchronized)</div>
+    </div>
+  </div>
+  <div style="border-top: 1px solid #30363d; margin-top: 12px; padding-top: 8px; display: flex; justify-content: space-between; font-size: 13px;">
+    <div>◴ <strong>Passing Baton:</strong> ${countDisplay} <span class="c-cyan">████████████████</span><span class="c-dim">░░░░░░░░</span></div>
+    <div class="c-dim">[Space] Launch  [p] Pause  [s] Skip</div>
+  </div>
+</div>
+`;
+    }
+
+    function render() {
+      const scenario = SCENARIOS[currentScenarioIndex];
+      const state = {
+        ...scenario,
+        variant: currentVariant,
+        countdown: countdownSeconds,
+        paused: isPaused,
+      };
+
+      // Update variant label & pills
+      const variantObj = VARIANTS.find(v => v.key === currentVariant);
+      document.getElementById('variantDisplayLabel').textContent = variantObj.name;
+      document.querySelectorAll('.v-pill').forEach(pill => {
+        pill.classList.toggle('active', pill.id === `pill-${currentVariant}`);
+      });
+
+      // Render Output
+      const term = document.getElementById('terminalOutput');
+      if (currentVariant === 'A') {
+        term.innerHTML = renderVariantAHtml(state);
+      } else if (currentVariant === 'B') {
+        term.innerHTML = renderVariantBHtml(state);
+      } else {
+        term.innerHTML = renderVariantCHtml(state);
+      }
+
+      // Surface State JSON
+      document.getElementById('stateDump').textContent = JSON.stringify(state, null, 2);
+    }
+
+    // Keyboard navigation
+    window.addEventListener('keydown', (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+      if (e.key === 'ArrowLeft' || e.key === '1') {
+        prevVariant();
+      } else if (e.key === 'ArrowRight' || e.key === '2') {
+        nextVariant();
+      } else if (e.key === '3') {
+        setVariant('C');
+      } else if (e.key === ' ' || e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        togglePause();
+      } else if (e.key.toLowerCase() === 'n') {
+        setScenario((currentScenarioIndex + 1) % SCENARIOS.length);
+      }
+    });
+
+    // Auto-countdown timer
+    setInterval(() => {
+      if (!isPaused) {
+        countdownSeconds -= 0.2;
+        if (countdownSeconds <= 0) {
+          countdownSeconds = 3.0;
+          currentScenarioIndex = (currentScenarioIndex + 1) % SCENARIOS.length;
+          document.querySelectorAll('.scenario-btn').forEach((btn, i) => {
+            btn.classList.toggle('active', i === currentScenarioIndex);
+          });
+        }
+        render();
+      }
+    }, 200);
+
+    // Initial setup
+    currentVariant = getVariantFromUrl();
+    render();
+  </script>
+</body>
+</html>
