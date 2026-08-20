@@ -37,6 +37,16 @@ describe('UI Formatters & Badges (Variant A TUI Flow)', () => {
       const badge = formatGatingBadge('CLOSED');
       expect(badge).toContain('[CLOSED]');
     });
+
+    it('should return badge for PARENT status', () => {
+      const badge = formatGatingBadge('PARENT');
+      expect(badge).toContain('[PARENT]');
+    });
+
+    it('should return badge for HITL status', () => {
+      const badge = formatGatingBadge('HITL');
+      expect(badge).toContain('[HITL]');
+    });
   });
 
   describe('formatIssueOption', () => {
@@ -106,6 +116,50 @@ describe('UI Formatters & Badges (Variant A TUI Flow)', () => {
       expect(option.value).toBe(12);
       expect(option.label).toContain('[UNGATED]');
       expect(option.hint).toContain('Missing ready-for-agent, AFK');
+    });
+
+    it('should format PARENT issue with parent badge and hint', () => {
+      const evaluation: GatingEvaluation = {
+        issueNumber: 40,
+        title: 'Epic: Navigation Architecture',
+        state: 'OPEN',
+        status: 'PARENT',
+        isReady: false,
+        hasReadyLabel: false,
+        hasAfkLabel: false,
+        isBlockedLabelPresent: false,
+        missingLabels: [],
+        prerequisiteIssueNumbers: [],
+        blockingIssueNumbers: [],
+        reasons: ['Issue is classified as a parent/epic specification.'],
+      };
+
+      const option = formatIssueOption(evaluation);
+      expect(option.value).toBe(40);
+      expect(option.label).toContain('[PARENT]');
+      expect(option.hint).toContain('Parent/epic');
+    });
+
+    it('should format HITL issue with HITL badge and hint', () => {
+      const evaluation: GatingEvaluation = {
+        issueNumber: 41,
+        title: 'Grilling: Interview',
+        state: 'OPEN',
+        status: 'HITL',
+        isReady: false,
+        hasReadyLabel: false,
+        hasAfkLabel: false,
+        isBlockedLabelPresent: false,
+        missingLabels: [],
+        prerequisiteIssueNumbers: [],
+        blockingIssueNumbers: [],
+        reasons: ['Issue requires human-in-the-loop interaction.'],
+      };
+
+      const option = formatIssueOption(evaluation);
+      expect(option.value).toBe(41);
+      expect(option.label).toContain('[HITL]');
+      expect(option.hint).toContain('Human-in-the-loop');
     });
   });
 

@@ -30,6 +30,25 @@ describe('ConfigService (3-Tier Configuration Resolution)', () => {
     expect(resolved.retries).toBe(DEFAULT_CONFIG.retries);
     expect(resolved.autoPr).toBe(true);
     expect(resolved.autoMerge).toBe(true);
+    expect(resolved.parentLabels).toEqual(['parent', 'epic', 'wayfinder:map']);
+    expect(resolved.hitlLabels).toEqual(['wayfinder:grilling', 'wayfinder:prototype']);
+  });
+
+  it('should support overriding parentLabels and hitlLabels in config', () => {
+    fs.mkdirSync(path.dirname(localConfigPath), { recursive: true });
+    fs.writeFileSync(
+      localConfigPath,
+      JSON.stringify({
+        parentLabels: ['custom-parent', 'epic'],
+        hitlLabels: ['custom-hitl'],
+      })
+    );
+
+    const configService = new ConfigService({ localConfigPath, globalConfigPath });
+    const resolved = configService.resolve();
+
+    expect(resolved.parentLabels).toEqual(['custom-parent', 'epic']);
+    expect(resolved.hitlLabels).toEqual(['custom-hitl']);
   });
 
   it('should merge global configuration over defaults', () => {

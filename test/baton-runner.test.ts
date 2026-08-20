@@ -293,5 +293,132 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       expect(result.totalProcessed).toBe(2);
       expect(result.closedIssues).toEqual([1, 2]);
     });
+
+    it('should skip PARENT and HITL issues with informational skip message and advance cleanly', async () => {
+      const parentIssue: GitHubIssue = {
+        number: 40,
+        title: 'Epic: Architecture',
+        body: 'Parent epic specification',
+        state: 'OPEN',
+        labels: [{ name: 'epic' }],
+      };
+
+      const hitlIssue: GitHubIssue = {
+        number: 41,
+        title: 'Interview: Spec alignment',
+        body: 'Needs human review',
+        state: 'OPEN',
+        labels: [{ name: 'wayfinder:grilling' }],
+      };
+
+      const childIssue: GitHubIssue = {
+        number: 42,
+        title: 'feat: Child Implementation',
+        body: 'Part of #40',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+      };
+
+      const mockGitHubService = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn((num: number) => {
+          if (num === 40) return Promise.resolve(parentIssue);
+          if (num === 41) return Promise.resolve(hitlIssue);
+          if (num === 42) return Promise.resolve(childIssue);
+          return Promise.resolve(undefined);
+        }),
+        reportBlocker: vi.fn(),
+        closeIssue: vi.fn(),
+      };
+
+      const mockGatingEvaluator = {
+        evaluateIssue: vi.fn((issue: GitHubIssue) => {
+          if (issue.number === 40) {
+            return Promise.resolve({
+              issueNumber: 40,
+              title: issue.title,
+              state: 'OPEN',
+              status: 'PARENT',
+              isReady: false,
+              missingLabels: [],
+              prerequisiteIssueNumbers: [],
+              blockingIssueNumbers: [],
+              reasons: ['Issue is classified as a parent/epic specification.'],
+            });
+          }
+          if (issue.number === 41) {
+            return Promise.resolve({
+              issueNumber: 41,
+              title: issue.title,
+              state: 'OPEN',
+              status: 'HITL',
+              isReady: false,
+              missingLabels: [],
+              prerequisiteIssueNumbers: [],
+              blockingIssueNumbers: [],
+              reasons: ['Issue requires human-in-the-loop interaction.'],
+            });
+          }
+          return Promise.resolve({
+            issueNumber: 42,
+            title: issue.title,
+            state: 'OPEN',
+            status: 'READY',
+            isReady: true,
+            missingLabels: [],
+            prerequisiteIssueNumbers: [],
+            blockingIssueNumbers: [],
+            reasons: ['All gate conditions satisfied.'],
+          });
+        }),
+      };
+
+      const mockProcessSupervisor = {
+        execute: vi.fn().mockResolvedValue({
+          success: true,
+          status: 'completed',
+          attempts: 1,
+          totalDurationMs: 800,
+        }),
+      };
+
+      const runner = new BatonRunner({
+        repo: 'owner/repo',
+        issues: [40, 41, 42],
+        githubService: mockGitHubService as any,
+        gatingEvaluator: mockGatingEvaluator as any,
+        processSupervisor: mockProcessSupervisor as any,
+        stateFilePath,
+        mode: 'afk',
+      });
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const blockedEvents: any[] = [];
+      runner.on('baton:blocked', (p) => blockedEvents.push(p));
+
+      const result = await runner.run();
+
+      expect(result.success).toBe(true);
+      expect(result.closedIssues).toEqual([42]);
+      expect(result.blockedIssues).toEqual([]);
+      expect(blockedEvents).toEqual([]);
+      expect(mockGitHubService.reportBlocker).not.toHaveBeenCalled();
+      expect(mockProcessSupervisor.execute).toHaveBeenCalledTimes(1);
+
+      // Verify skip logs
+      const logCalls = consoleSpy.mock.calls.map((call) => call[0]);
+      expect(logCalls.some((msg) => typeof msg === 'string' && msg.includes('[SKIP] Skipping parent/HITL issue #40'))).toBe(true);
+      expect(logCalls.some((msg) => typeof msg === 'string' && msg.includes('[SKIP] Skipping parent/HITL issue #41'))).toBe(true);
+
+      // Verify state snapshot
+      const snapshot: BatonRunSnapshot = JSON.parse(fs.readFileSync(stateFilePath, 'utf-8'));
+      expect(snapshot.status).toBe('completed');
+      expect(snapshot.processedIssues).toHaveLength(3);
+      expect(snapshot.processedIssues[0]).toMatchObject({ number: 40, status: 'skipped' });
+      expect(snapshot.processedIssues[1]).toMatchObject({ number: 41, status: 'skipped' });
+      expect(snapshot.processedIssues[2]).toMatchObject({ number: 42, status: 'completed' });
+
+      consoleSpy.mockRestore();
+    });
   });
 });
