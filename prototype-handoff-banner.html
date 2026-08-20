@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sandcastle — Visual Baton Handoff Prototype (Issue #37)</title>
+  <title>Sandcastle — Baton Handoff CLI Architecture Prototype (Issue #37)</title>
   <style>
     :root {
       --bg: #0d1117;
@@ -39,9 +39,9 @@
     }
 
     header {
-      max-width: 960px;
+      max-width: 980px;
       width: 100%;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
 
     .badge {
@@ -57,7 +57,7 @@
     }
 
     h1 {
-      font-size: 26px;
+      font-size: 24px;
       font-weight: 700;
       letter-spacing: -0.02em;
       margin-bottom: 6px;
@@ -77,18 +77,55 @@
       padding: 10px 14px;
       border-radius: 6px;
       font-size: 13px;
-      margin-top: 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+      margin-top: 12px;
     }
 
     .main-container {
-      max-width: 960px;
+      max-width: 980px;
       width: 100%;
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 18px;
+    }
+
+    /* Surface selector tabs */
+    .surface-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .surface-tab {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      padding: 12px;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.15s ease;
+    }
+    .surface-tab:hover {
+      border-color: #8b949e;
+      background: #21262d;
+    }
+    .surface-tab.active {
+      border-color: var(--cyan);
+      background: #1c2736;
+      box-shadow: 0 0 0 1px var(--cyan);
+    }
+    .surface-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: #ffffff;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .surface-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.3;
     }
 
     /* Scenario Bar */
@@ -141,11 +178,20 @@
       border-radius: 6px;
       font-size: 12px;
       cursor: pointer;
-      margin-left: auto;
     }
     .action-btn:hover {
       color: var(--text);
       background: #21262d;
+    }
+    .action-btn-primary {
+      background: #238636;
+      border-color: rgba(240, 246, 252, 0.1);
+      color: #ffffff;
+      font-weight: 600;
+      margin-left: auto;
+    }
+    .action-btn-primary:hover {
+      background: #2ea043;
     }
 
     /* Terminal Window Container */
@@ -196,7 +242,7 @@
       word-break: break-all;
     }
 
-    /* Variant Specific Rendering Components */
+    /* Color Tokens */
     .c-green { color: var(--green); }
     .c-cyan { color: var(--cyan); }
     .c-yellow { color: var(--yellow); }
@@ -218,16 +264,6 @@
     .box-cyan {
       border-color: rgba(56, 189, 248, 0.4);
       background: rgba(56, 189, 248, 0.04);
-    }
-    .box-hud {
-      border: 1px solid #30363d;
-      background: #11161d;
-    }
-
-    .grid-2col {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
     }
 
     /* State Inspector */
@@ -301,7 +337,7 @@
       font-size: 13px;
       font-weight: 600;
       color: #ffffff;
-      min-width: 220px;
+      min-width: 240px;
       text-align: center;
     }
 
@@ -337,25 +373,46 @@
 <body>
 
   <header>
-    <div class="badge">SANDCASTLE PROTOTYPE • ISSUE #37</div>
-    <h1>Baton Handoff Banners & Transition Displays</h1>
+    <div class="badge">SANDCASTLE CLI ARCHITECTURE PROTOTYPE • ISSUE #37</div>
+    <h1>Visual Baton Handoff across 4 CLI Surfaces</h1>
     <p class="subtitle">
-      Evaluating terminal layout, timing indicators, telemetry density, and next-candidate previews during sequential agent handoffs.
+      Demonstrates how baton handoffs adaptively render across <code>sandcastle run</code>, interactive <code>wizard</code>, live <code>watch</code> monitor, and CI/CD stream pipelines.
     </p>
     <div class="prototype-notice">
-      <span>⚠️ <strong>Throwaway Prototype:</strong> Three radically different layouts for Sandcastle CLI execution transitions. Use <code>?variant=A|B|C</code> or bottom bar arrows to switch.</span>
+      <span>⚠️ <strong>Architecture Prototype:</strong> Switch between CLI execution surfaces below or via URL <code>?mode=run|wizard|watch|ci</code>.</span>
     </div>
   </header>
 
   <div class="main-container">
 
+    <!-- Surface Mode Cards -->
+    <div class="surface-tabs">
+      <div class="surface-tab active" id="tab-run" onclick="setMode('run')">
+        <div class="surface-title">1. run CLI <span class="c-cyan">●</span></div>
+        <div class="surface-desc">Headless stdout with Relay Scorecard & target preview.</div>
+      </div>
+      <div class="surface-tab" id="tab-wizard" onclick="setMode('wizard')">
+        <div class="surface-title">2. wizard TUI <span class="c-dim">●</span></div>
+        <div class="surface-desc">@clack/prompts interactive step transition & note card.</div>
+      </div>
+      <div class="surface-tab" id="tab-watch" onclick="setMode('watch')">
+        <div class="surface-title">3. watch Monitor <span class="c-dim">●</span></div>
+        <div class="surface-desc">Alternate-screen live HUD with in-flight handoff box.</div>
+      </div>
+      <div class="surface-tab" id="tab-ci" onclick="setMode('ci')">
+        <div class="surface-title">4. CI Stream <span class="c-dim">●</span></div>
+        <div class="surface-desc">Single-line pipeline stream with 0s instant pacing.</div>
+      </div>
+    </div>
+
     <!-- Scenarios / Test Cases -->
     <div class="controls-bar">
-      <span class="controls-label">Scenario:</span>
-      <button class="scenario-btn active" onclick="setScenario(0)">1. Standard Child (#36 ➔ #37)</button>
-      <button class="scenario-btn" onclick="setScenario(1)">2. Multi-Child Epic (#35 ➔ #36)</button>
+      <span class="controls-label">Queue Scenario:</span>
+      <button class="scenario-btn active" onclick="setScenario(0)">1. Sequential Child (#36 ➔ #37)</button>
+      <button class="scenario-btn" onclick="setScenario(1)">2. Map Initiation (#35 ➔ #36)</button>
       <button class="scenario-btn" onclick="setScenario(2)">3. Blocked Gating Gate (#37 ➔ #38)</button>
-      <button class="action-btn" id="pauseBtn" onclick="togglePause()">⏸ Pause Countdown</button>
+      <button class="action-btn" id="pauseBtn" onclick="togglePause()">⏸ Pause (Space)</button>
+      <button class="action-btn action-btn-primary" onclick="fastForward()">⚡ Spool Worker Now (Enter)</button>
     </div>
 
     <!-- Terminal Mockup Window -->
@@ -366,7 +423,7 @@
           <span class="win-btn win-min"></span>
           <span class="win-btn win-max"></span>
         </div>
-        <div class="window-title">sandcastle run — 80x24 TTY</div>
+        <div class="window-title" id="terminalTitle">sandcastle run — 80x24 TTY</div>
         <div style="width: 40px;"></div>
       </div>
       <div class="terminal-body" id="terminalOutput">
@@ -377,37 +434,39 @@
     <!-- Surface the State Panel -->
     <div class="state-card">
       <div class="state-title">
-        <span>Surfaced Prototype State (Live JSON)</span>
-        <span class="key-hint">Updates automatically on every action & switch</span>
+        <span>Surfaced BatonHandoffPayload State (Live JSON)</span>
+        <span class="key-hint">Emitted on 'baton:handoff' event in BatonRunner</span>
       </div>
       <pre class="state-dump" id="stateDump"></pre>
     </div>
 
   </div>
 
-  <!-- Floating Switcher Bar (Required by UI Prototype Spec) -->
+  <!-- Floating Switcher Bar -->
   <div class="prototype-switcher">
-    <button class="nav-arrow" onclick="prevVariant()" title="Previous Variant (← arrow)">◀</button>
-    <div class="variant-label" id="variantDisplayLabel">Variant A — Relay Scorecard</div>
+    <button class="nav-arrow" onclick="prevMode()" title="Previous Surface (← arrow)">◀</button>
+    <div class="variant-label" id="modeDisplayLabel">1. run CLI (Relay Scorecard)</div>
     <div class="variant-pills">
-      <a class="v-pill" id="pill-A" href="javascript:setVariant('A')">A</a>
-      <a class="v-pill" id="pill-B" href="javascript:setVariant('B')">B</a>
-      <a class="v-pill" id="pill-C" href="javascript:setVariant('C')">C</a>
+      <a class="v-pill" id="pill-run" href="javascript:setMode('run')">run</a>
+      <a class="v-pill" id="pill-wizard" href="javascript:setMode('wizard')">wizard</a>
+      <a class="v-pill" id="pill-watch" href="javascript:setMode('watch')">watch</a>
+      <a class="v-pill" id="pill-ci" href="javascript:setMode('ci')">ci</a>
     </div>
-    <button class="nav-arrow" onclick="nextVariant()" title="Next Variant (→ arrow)">▶</button>
-    <span class="key-hint">Press ← / →</span>
+    <button class="nav-arrow" onclick="nextMode()" title="Next Surface (→ arrow)">▶</button>
+    <span class="key-hint">Press 1-4 or ← / →</span>
   </div>
 
   <script>
-    const VARIANTS = [
-      { key: 'A', name: 'A — Relay Scorecard (Boxed Ledger)' },
-      { key: 'B', name: 'B — Compact Stage Pipeline (Fast Stream)' },
-      { key: 'C', name: 'C — Split Telemetry HUD (2-Column)' },
+    const SURFACES = [
+      { key: 'run', title: 'sandcastle run — 80x24 TTY', name: '1. run CLI (Relay Scorecard)' },
+      { key: 'wizard', title: 'sandcastle wizard (Clack TUI)', name: '2. wizard TUI (Clack Flow)' },
+      { key: 'watch', title: 'sandcastle watch (Alternate Screen)', name: '3. watch Monitor (Alternate Screen)' },
+      { key: 'ci', title: 'CI Pipeline Runner (stdout stream)', name: '4. CI Stream (Compact Single-line)' },
     ];
 
     const SCENARIOS = [
       {
-        name: 'Standard Sequential Child Execution (#36 -> #37)',
+        name: 'Sequential Child Handoff (#36 -> #37 under Map #34)',
         queueIndex: 2,
         totalQueue: 5,
         completed: {
@@ -436,15 +495,15 @@
           model: 'gemini-3.7-flash',
           reasoningEffort: 'high',
           acceptanceCriteria: [
-            { text: '3 distinct layout variants switchable via URL/CLI', done: true },
-            { text: 'Timing breakdown and countdown pacing indicator', done: true },
-            { text: 'Interactive CLI simulation switcher', done: false },
+            { text: 'Adaptive rendering across all 4 CLI operational surfaces', done: true },
+            { text: '3s pacing delay with Space pause and Enter fast-forward', done: true },
+            { text: 'Next candidate preview with acceptance criteria checkmarks', done: true },
           ],
           estimatedDurationSeconds: 45,
         }
       },
       {
-        name: 'Multi-Child Map Milestone (#35 -> #36)',
+        name: 'Parent Issue Map Initiation (#35 -> #36 under Map #34)',
         queueIndex: 1,
         totalQueue: 5,
         completed: {
@@ -481,7 +540,7 @@
         }
       },
       {
-        name: 'Gated / Blocked Candidate Transition (#37 -> #38)',
+        name: 'Blocked Dependency Warning Gate (#37 -> #38)',
         queueIndex: 3,
         totalQueue: 5,
         completed: {
@@ -519,34 +578,40 @@
     ];
 
     let currentScenarioIndex = 0;
-    let currentVariant = 'A';
+    let currentMode = 'run';
     let countdownSeconds = 3.0;
     let isPaused = false;
 
-    function getVariantFromUrl() {
+    function getModeFromUrl() {
       const params = new URLSearchParams(window.location.search);
-      const v = params.get('variant');
-      return (v && ['A', 'B', 'C'].includes(v.toUpperCase())) ? v.toUpperCase() : 'A';
+      const m = params.get('mode') || params.get('variant');
+      if (m && ['RUN', 'WIZARD', 'WATCH', 'CI'].includes(m.toUpperCase())) {
+        return m.toLowerCase();
+      }
+      if (m && m.toUpperCase() === 'A') return 'run';
+      if (m && m.toUpperCase() === 'B') return 'ci';
+      if (m && m.toUpperCase() === 'C') return 'watch';
+      return 'run';
     }
 
-    function setVariant(v) {
-      currentVariant = v;
+    function setMode(m) {
+      currentMode = m;
       const url = new URL(window.location);
-      url.searchParams.set('variant', v);
+      url.searchParams.set('mode', m);
       window.history.replaceState({}, '', url);
       render();
     }
 
-    function prevVariant() {
-      const idx = VARIANTS.findIndex(v => v.key === currentVariant);
-      const nextIdx = (idx - 1 + VARIANTS.length) % VARIANTS.length;
-      setVariant(VARIANTS[nextIdx].key);
+    function prevMode() {
+      const idx = SURFACES.findIndex(s => s.key === currentMode);
+      const nextIdx = (idx - 1 + SURFACES.length) % SURFACES.length;
+      setMode(SURFACES[nextIdx].key);
     }
 
-    function nextVariant() {
-      const idx = VARIANTS.findIndex(v => v.key === currentVariant);
-      const nextIdx = (idx + 1) % VARIANTS.length;
-      setVariant(VARIANTS[nextIdx].key);
+    function nextMode() {
+      const idx = SURFACES.findIndex(s => s.key === currentMode);
+      const nextIdx = (idx + 1) % SURFACES.length;
+      setMode(SURFACES[nextIdx].key);
     }
 
     function setScenario(idx) {
@@ -560,7 +625,16 @@
 
     function togglePause() {
       isPaused = !isPaused;
-      document.getElementById('pauseBtn').textContent = isPaused ? '▶ Resume Countdown' : '⏸ Pause Countdown';
+      document.getElementById('pauseBtn').textContent = isPaused ? '▶ Resume (Space)' : '⏸ Pause (Space)';
+      render();
+    }
+
+    function fastForward() {
+      countdownSeconds = 3.0;
+      currentScenarioIndex = (currentScenarioIndex + 1) % SCENARIOS.length;
+      document.querySelectorAll('.scenario-btn').forEach((btn, i) => {
+        btn.classList.toggle('active', i === currentScenarioIndex);
+      });
       render();
     }
 
@@ -568,8 +642,8 @@
       return (ms / 1000).toFixed(1) + 's';
     }
 
-    /* VARIANT A: Boxed Ledger Card */
-    function renderVariantAHtml(state) {
+    /* 1. RUN MODE HTML */
+    function renderRunHtml(state) {
       const { completed, next, queueIndex, totalQueue, countdown, paused } = state;
       const progressPct = Math.round((queueIndex / totalQueue) * 100);
       const countDisplay = paused ? '<span class="c-yellow">[PAUSED]</span>' : `<span class="c-cyan">${countdown.toFixed(1)}s</span>`;
@@ -608,15 +682,83 @@
   ${next.acceptanceCriteria.map(ac => `  <div>  ${ac.done ? '<span class="c-green">☑</span>' : '<span class="c-dim">☐</span>'} ${ac.text}</div>`).join('')}
   <div class="c-cyan c-bold" style="margin-top: 6px;">└─────────────────────────────────────────────────────────────────────────┘</div>
 </div>
-<div class="c-dim" style="text-align: center; font-size: 12px;">Controls: [Space] Launch Now  │  [p] Pause/Resume  │  [s] Skip  │  [q] Abort</div>
+<div class="c-dim" style="text-align: center; font-size: 12px;">Controls: [Space] Pause/Resume  │  [Enter] Launch Now  │  [s] Skip  │  [q] Abort</div>
 `;
     }
 
-    /* VARIANT B: Compact Pipeline */
-    function renderVariantBHtml(state) {
+    /* 2. WIZARD MODE HTML */
+    function renderWizardHtml(state) {
       const { completed, next, queueIndex, totalQueue, countdown, paused } = state;
-      const countDisplay = paused ? '<span class="c-yellow">PAUSED</span>' : `<span class="c-cyan">${countdown.toFixed(1)}s</span>`;
+      const countDisplay = paused ? '<span class="c-yellow">[PAUSED]</span>' : `<span class="c-cyan">${countdown.toFixed(1)}s</span>`;
 
+      return `
+<div style="line-height: 1.8;">
+  <div><span class="c-green">✔</span> <strong class="c-bold">Issue #${completed.number} closed successfully</strong> in ${formatMs(completed.durationMs)} (PR #${completed.prNumber} merged, ${completed.testsPassed} tests passed)</div>
+  <br/>
+  <div class="c-cyan c-bold">◆ Sandcastle Baton Handoff Note</div>
+  <div class="c-cyan">│</div>
+  <div class="c-cyan">│  <strong style="color: #fff;">Completed:</strong>  #${completed.number} ${completed.title}</div>
+  <div class="c-cyan">│  <strong style="color: #fff;">Progress:</strong>   ${queueIndex}/${totalQueue} issues closed (${Math.round((queueIndex / totalQueue) * 100)}%)</div>
+  <div class="c-cyan">│  <strong style="color: #fff;">Next Up:</strong>    #${next.number} "${next.title}" <span class="c-green">[READY]</span></div>
+  ${next.parentIssue ? `<div class="c-cyan">│  <strong style="color: #fff;">Parent:</strong>     #${next.parentIssue.number} (Child ${next.parentIssue.childIndex}/${next.parentIssue.totalChildren})</div>` : ''}
+  <div class="c-cyan">│  <strong style="color: #fff;">Engine:</strong>     ${next.model} (${next.reasoningEffort} reasoning)</div>
+  <div class="c-cyan">│</div>
+  <div class="c-cyan">└ <span class="c-dim">Spooling next worker session in ${countDisplay}... [Press Space to pause or Enter to start]</span></div>
+  <br/>
+  <div class="c-cyan">◓ <span class="c-dim">[1/6 Inspecting] Fetching requirements for Issue #${next.number}...</span></div>
+</div>
+`;
+    }
+
+    /* 3. WATCH MODE HTML */
+    function renderWatchHtml(state) {
+      const { completed, next, queueIndex, totalQueue, countdown, paused } = state;
+      const progressPct = Math.round((queueIndex / totalQueue) * 100);
+      const countDisplay = paused ? '<span class="c-yellow">[PAUSED]</span>' : `<span class="c-yellow c-bold">${countdown.toFixed(1)}s</span>`;
+
+      return `
+<div>
+  <div style="margin-bottom: 6px;">
+    <span style="background: #38bdf8; color: #000; font-weight: bold; padding: 2px 6px;"> SANDCASTLE </span>
+    <span class="c-cyan c-bold"> LIVE WATCH MONITOR </span>
+    <span class="c-dim">[Elapsed: 01:22]</span>
+  </div>
+  <div class="c-dim">──────────────────────────────────────────────────────────────────────────</div>
+  <div style="margin: 6px 0;">
+    <span style="background: #3b82f6; color: #000; font-weight: bold; padding: 2px 6px; font-size: 11px;"> BATON HANDOFF </span>
+    <strong>Repo:</strong> <span class="c-magenta">Vudattumaniteja/sandcastle-baton-demo</span>
+    <strong>Session:</strong> <span class="c-dim">baton-live-37</span>
+  </div>
+  <div style="margin-bottom: 12px;">
+    <strong>Active:</strong> <span class="c-yellow">Handoff #${completed.number} ➔ #${next.number}</span>
+    &nbsp;│&nbsp;
+    <strong>Progress:</strong> ${queueIndex}/${totalQueue} closed <span class="c-cyan">████████</span><span class="c-dim">░░░░░░░░░░░░</span> ${progressPct}%
+  </div>
+
+  <div class="box-card" style="border-color: #484f58; background: #11161d; margin-bottom: 12px;">
+    <div class="c-bold" style="margin-bottom: 6px;">┌─ 🏃 Baton In Flight ──────────────────────────────────────────────────┐</div>
+    <div>│  <span class="c-green">✔ Last Completed:</span> Issue #${completed.number} (${formatMs(completed.durationMs)} • PR #${completed.prNumber} • 100% green)</div>
+    <div>│  <span class="c-cyan">▶ Next Candidate:</span>  Issue #${next.number} [READY] • ${next.model} (${next.reasoningEffort})</div>
+    ${next.parentIssue ? `<div class="c-dim">│  ↳ Parent Issue:   #${next.parentIssue.number} (Child ${next.parentIssue.childIndex}/${next.parentIssue.totalChildren})</div>` : ''}
+    <div>│  <strong>⏱ Next Session:</strong>   Spooling in ${countDisplay} [<span class="c-cyan">████████████</span><span class="c-dim">░░░░░░░░</span>]</div>
+    <div class="c-bold" style="margin-top: 6px;">└───────────────────────────────────────────────────────────────────────┘</div>
+  </div>
+
+  <div class="box-card" style="border-color: #484f58; background: #11161d; margin-bottom: 12px;">
+    <div class="c-bold" style="margin-bottom: 6px;">┌─ Agent Reasoning / Status ────────────────────────────────────────────┐</div>
+    <div class="c-cyan" style="font-style: italic;">│ Finalizing git merge for PR #${completed.prNumber} and verifying closure audit comment...</div>
+    <div class="c-dim">│ Preparing clean worker context for Issue #${next.number}...</div>
+    <div class="c-bold" style="margin-top: 6px;">└───────────────────────────────────────────────────────────────────────┘</div>
+  </div>
+
+  <div style="font-size: 12px;"><strong>Model:</strong> <span class="c-green">${next.model}</span>  │  <strong>Quota:</strong> <span class="c-cyan">████████</span><span class="c-dim">░░</span> 88%  │  <strong>Tokens:</strong> 18.4k</div>
+</div>
+`;
+    }
+
+    /* 4. CI MODE HTML */
+    function renderCiHtml(state) {
+      const { completed, next, queueIndex, totalQueue } = state;
       const qItems = [];
       for (let i = 1; i <= totalQueue; i++) {
         if (i < queueIndex) {
@@ -634,50 +776,8 @@
 <div style="line-height: 1.8;">
   <div><span class="c-green">✔</span> <strong class="c-bold">BATON COMPLETED: #${completed.number}</strong> "${completed.title}" <span class="c-dim">[${formatMs(completed.durationMs)} • PR #${completed.prNumber} merged • ${completed.testsPassed} tests green]</span></div>
   <div style="margin: 8px 0;"><span class="c-dim">Pipeline:</span> ${qItems.join(' <span class="c-dim">──▶</span> ')} <span class="c-dim">(${queueIndex}/${totalQueue})</span></div>
-  <div style="margin: 8px 0;"><span class="c-cyan">>>></span> <strong class="c-bold">Transferring baton in ${countDisplay}...</strong> <span class="c-dim">[Space: Run now | s: Skip | q: Stop]</span></div>
+  <div style="margin: 8px 0;"><span class="c-cyan">>>></span> <strong class="c-bold">Instant handoff to #${next.number}...</strong> <span class="c-dim">(CI mode: 0s pacing)</span></div>
   <div style="margin-top: 12px;"><span class="c-magenta">↳ TARGET</span> <strong class="c-bold">#${next.number}</strong> "${next.title}" <span class="c-green">[${next.gatingStatus}]</span></div>
-  <div class="c-dim" style="padding-left: 18px;">${next.parentIssue ? `Parent #${next.parentIssue.number} (${next.parentIssue.childIndex}/${next.parentIssue.totalChildren}) • ` : ''}Model: ${next.model} (${next.reasoningEffort}) • Est: ~${next.estimatedDurationSeconds}s • 0 blockers</div>
-</div>
-`;
-    }
-
-    /* VARIANT C: Split HUD */
-    function renderVariantCHtml(state) {
-      const { completed, next, countdown, paused } = state;
-      const countDisplay = paused ? '<span class="c-yellow">PAUSED</span>' : `<span class="c-cyan">${countdown.toFixed(1)}s</span>`;
-
-      return `
-<div class="box-card box-hud">
-  <div class="c-bold" style="border-bottom: 1px solid #30363d; padding-bottom: 6px; margin-bottom: 10px;">
-    ┌─ 📊 Retrospective (#${completed.number} Completed) ────────┬─ 🎯 Pre-flight Readiness (#${next.number} Target) ─────┐
-  </div>
-  <div class="grid-2col">
-    <div>
-      <div><strong>Issue:</strong>    #${completed.number} (${formatMs(completed.durationMs)})</div>
-      <div><strong>Branch:</strong>   ${completed.branchName} (PR #${completed.prNumber})</div>
-      <div><strong>Quality:</strong>  <span class="c-green">${completed.testsPassed}/${completed.testsTotal} green</span> (${completed.tokensUsed.toLocaleString()} tok)</div>
-      <div style="margin-top: 8px; color: var(--text-muted); font-size: 12px;">Phase Breakdown:</div>
-      <div style="font-size: 12px;">  Inspect   <span class="c-cyan">■■■</span> ${formatMs(completed.phaseBreakdown.inspectMs)}</div>
-      <div style="font-size: 12px;">  Implement <span class="c-cyan">■■■■■■■■■■■■</span> ${formatMs(completed.phaseBreakdown.implementMs)}</div>
-      <div style="font-size: 12px;">  Verify    <span class="c-cyan">■■■■■■</span> ${formatMs(completed.phaseBreakdown.testMs)}</div>
-      <div style="font-size: 12px;">  Git/PR    <span class="c-cyan">■■</span> ${formatMs(completed.phaseBreakdown.gitPrMs)}</div>
-    </div>
-    <div>
-      <div><strong>Target:</strong>   #${next.number} <span class="c-green">[${next.gatingStatus}]</span></div>
-      <div><strong>Title:</strong>    ${next.title.substring(0, 36)}...</div>
-      <div><strong>Parent:</strong>   ${next.parentIssue ? `#${next.parentIssue.number} (Child ${next.parentIssue.childIndex}/${next.parentIssue.totalChildren})` : 'None'}</div>
-      <div><strong>Model:</strong>    ${next.model} (${next.reasoningEffort})</div>
-      <div><strong>Labels:</strong>   <span class="c-dim">${next.labels.join(', ')}</span></div>
-      <div style="margin-top: 8px; color: var(--text-muted); font-size: 12px;">Readiness Checks:</div>
-      <div style="font-size: 12px;"><span class="c-green">✔</span> Gating labels verified (ready-for-agent, AFK)</div>
-      <div style="font-size: 12px;"><span class="c-green">✔</span> 0 blocking parent dependencies</div>
-      <div style="font-size: 12px;"><span class="c-green">✔</span> Workspace clean (origin/main synchronized)</div>
-    </div>
-  </div>
-  <div style="border-top: 1px solid #30363d; margin-top: 12px; padding-top: 8px; display: flex; justify-content: space-between; font-size: 13px;">
-    <div>◴ <strong>Passing Baton:</strong> ${countDisplay} <span class="c-cyan">████████████████</span><span class="c-dim">░░░░░░░░</span></div>
-    <div class="c-dim">[Space] Launch  [p] Pause  [s] Skip</div>
-  </div>
 </div>
 `;
     }
@@ -686,26 +786,34 @@
       const scenario = SCENARIOS[currentScenarioIndex];
       const state = {
         ...scenario,
-        variant: currentVariant,
+        mode: currentMode,
         countdown: countdownSeconds,
         paused: isPaused,
       };
 
-      // Update variant label & pills
-      const variantObj = VARIANTS.find(v => v.key === currentVariant);
-      document.getElementById('variantDisplayLabel').textContent = variantObj.name;
-      document.querySelectorAll('.v-pill').forEach(pill => {
-        pill.classList.toggle('active', pill.id === `pill-${currentVariant}`);
+      // Update surface tabs
+      document.querySelectorAll('.surface-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.id === `tab-${currentMode}`);
       });
 
-      // Render Output
+      // Update floating pill & label
+      const surfaceObj = SURFACES.find(s => s.key === currentMode);
+      document.getElementById('modeDisplayLabel').textContent = surfaceObj.name;
+      document.getElementById('terminalTitle').textContent = surfaceObj.title;
+      document.querySelectorAll('.v-pill').forEach(pill => {
+        pill.classList.toggle('active', pill.id === `pill-${currentMode}`);
+      });
+
+      // Render Terminal Output
       const term = document.getElementById('terminalOutput');
-      if (currentVariant === 'A') {
-        term.innerHTML = renderVariantAHtml(state);
-      } else if (currentVariant === 'B') {
-        term.innerHTML = renderVariantBHtml(state);
+      if (currentMode === 'run') {
+        term.innerHTML = renderRunHtml(state);
+      } else if (currentMode === 'wizard') {
+        term.innerHTML = renderWizardHtml(state);
+      } else if (currentMode === 'watch') {
+        term.innerHTML = renderWatchHtml(state);
       } else {
-        term.innerHTML = renderVariantCHtml(state);
+        term.innerHTML = renderCiHtml(state);
       }
 
       // Surface State JSON
@@ -716,23 +824,31 @@
     window.addEventListener('keydown', (e) => {
       if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
 
-      if (e.key === 'ArrowLeft' || e.key === '1') {
-        prevVariant();
-      } else if (e.key === 'ArrowRight' || e.key === '2') {
-        nextVariant();
+      if (e.key === 'ArrowLeft') {
+        prevMode();
+      } else if (e.key === 'ArrowRight') {
+        nextMode();
+      } else if (e.key === '1') {
+        setMode('run');
+      } else if (e.key === '2') {
+        setMode('wizard');
       } else if (e.key === '3') {
-        setVariant('C');
+        setMode('watch');
+      } else if (e.key === '4') {
+        setMode('ci');
       } else if (e.key === ' ' || e.key.toLowerCase() === 'p') {
         e.preventDefault();
         togglePause();
+      } else if (e.key === 'Enter') {
+        fastForward();
       } else if (e.key.toLowerCase() === 'n') {
         setScenario((currentScenarioIndex + 1) % SCENARIOS.length);
       }
     });
 
-    // Auto-countdown timer
+    // Auto-countdown timer (active in all modes except CI)
     setInterval(() => {
-      if (!isPaused) {
+      if (!isPaused && currentMode !== 'ci') {
         countdownSeconds -= 0.2;
         if (countdownSeconds <= 0) {
           countdownSeconds = 3.0;
@@ -746,7 +862,7 @@
     }, 200);
 
     // Initial setup
-    currentVariant = getVariantFromUrl();
+    currentMode = getModeFromUrl();
     render();
   </script>
 </body>

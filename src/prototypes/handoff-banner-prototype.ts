@@ -1,67 +1,68 @@
 /**
- * PROTOTYPE - Visual Baton Handoff Banners & Transition Displays (Issue #37)
+ * PROTOTYPE - Visual Baton Handoff Banners & CLI Integration (Issue #37)
  * 
  * Question: What visual format, terminal layout, timing indicators, and next-issue
- * previews should Sandcastle display in the CLI during baton handoff between
- * completed issues and the next queue candidates?
+ * previews should Sandcastle display across its CLI operational surfaces
+ * (run, wizard, watch, and CI stream) during baton handoff?
  * 
  * This file is throwaway prototype code. Do not use in production without refactoring.
  */
 
 import pc from 'picocolors';
 
-export interface CompletedIssueSummary {
-  number: number;
-  title: string;
-  durationMs: number;
-  prNumber?: number;
-  branchName?: string;
-  testsPassed: number;
-  testsTotal: number;
-  tokensUsed: number;
-  costUsd: number;
-  attempts: number;
-  phaseBreakdown: {
-    inspectMs: number;
-    implementMs: number;
-    testMs: number;
-    gitPrMs: number;
-  };
-}
+export type CliMode = 'run' | 'wizard' | 'watch' | 'ci';
 
-export interface NextIssueCandidate {
-  number: number;
-  title: string;
-  gatingStatus: 'READY' | 'WAITING' | 'BLOCKED' | 'UNGATED';
-  labels: string[];
-  parentIssue?: {
-    number: number;
-    title: string;
-    childIndex: number;
-    totalChildren: number;
-  };
-  model: string;
-  reasoningEffort: 'high' | 'medium' | 'low';
-  acceptanceCriteria: Array<{ text: string; done: boolean }>;
-  blockingDependencies: number[];
-  estimatedDurationSeconds: number;
-}
-
-export interface HandoffState {
-  variant: 'A' | 'B' | 'C';
+export interface BatonHandoffPayload {
+  mode: CliMode;
   queueIndex: number;
   totalQueue: number;
-  completed: CompletedIssueSummary;
-  next: NextIssueCandidate;
   countdownSeconds: number;
   isPaused: boolean;
   activeScenarioName: string;
+  completed: {
+    number: number;
+    title: string;
+    durationMs: number;
+    prNumber?: number;
+    branchName?: string;
+    testsPassed: number;
+    testsTotal: number;
+    tokensUsed: number;
+    costUsd: number;
+    attempts: number;
+    phaseBreakdown: {
+      inspectMs: number;
+      implementMs: number;
+      testMs: number;
+      gitPrMs: number;
+    };
+  };
+  next: {
+    number: number;
+    title: string;
+    gatingStatus: 'READY' | 'WAITING' | 'BLOCKED' | 'UNGATED';
+    labels: string[];
+    parentIssue?: {
+      number: number;
+      title: string;
+      childIndex: number;
+      totalChildren: number;
+    };
+    model: string;
+    reasoningEffort: 'high' | 'medium' | 'low';
+    acceptanceCriteria: Array<{ text: string; done: boolean }>;
+    blockingDependencies: number[];
+    estimatedDurationSeconds: number;
+  };
 }
 
-export const SAMPLE_HANDOFF_DATA: HandoffState = {
-  variant: 'A',
+export const SAMPLE_BATON_PAYLOAD: BatonHandoffPayload = {
+  mode: 'run',
   queueIndex: 2,
   totalQueue: 5,
+  countdownSeconds: 3.0,
+  isPaused: false,
+  activeScenarioName: 'Sequential Child Handoff (#36 -> #37)',
   completed: {
     number: 36,
     title: 'CLI execution flags (--from, --only, --all) and wizard resumption flow',
@@ -94,32 +95,23 @@ export const SAMPLE_HANDOFF_DATA: HandoffState = {
     model: 'gemini-3.7-flash',
     reasoningEffort: 'high',
     acceptanceCriteria: [
-      { text: '3 distinct layout variants switchable via URL/CLI', done: true },
-      { text: 'Timing breakdown and countdown pacing indicator', done: true },
-      { text: 'Interactive CLI simulation switcher', done: false },
+      { text: 'Adaptive rendering across all 4 CLI operational surfaces', done: true },
+      { text: '3s pacing delay with Space pause and Enter fast-forward', done: true },
+      { text: 'Next candidate preview with acceptance criteria checkmarks', done: true },
     ],
     blockingDependencies: [],
     estimatedDurationSeconds: 45,
   },
-  countdownSeconds: 3.0,
-  isPaused: false,
-  activeScenarioName: 'Sequential Child Execution (#36 -> #37)',
 };
 
-/**
- * Format duration helper
- */
 function formatMs(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
 /**
- * VARIANT A: Baton Relay Scorecard (Boxed Telemetry & Milestone Ledger)
- * 
- * Philosophy: Heavy structural double-line box frames. High-density, high-contrast
- * structured scorecard presenting retrospective metrics, animated relay bar, and next target.
+ * 1. CLI RUN MODE (Standard stdout stream with Relay Scorecard & Next Preview)
  */
-export function renderVariantA(state: HandoffState): string {
+export function renderRunMode(state: BatonHandoffPayload): string {
   const { completed, next, queueIndex, totalQueue, countdownSeconds, isPaused } = state;
   const lines: string[] = [];
 
@@ -128,7 +120,7 @@ export function renderVariantA(state: HandoffState): string {
     ? pc.yellow('[PAUSED]')
     : pc.cyan(`${countdownSeconds.toFixed(1)}s`);
 
-  // Top Completed Scorecard
+  // Completed Issue Milestone Card
   lines.push(pc.bold(pc.green('╔══ 🏁 BATON PASSED: Issue #' + completed.number + ' (' + queueIndex + '/' + totalQueue + ' complete) ══════════════════════════════════════╗')));
   lines.push(pc.bold(pc.green('║')) + '  ' + pc.bold(completed.title.length > 70 ? completed.title.substring(0, 67) + '...' : completed.title.padEnd(70)) + ' ' + pc.bold(pc.green('║')));
   lines.push(pc.bold(pc.green('║')) + pc.gray('─'.repeat(74)) + pc.bold(pc.green('║')));
@@ -144,7 +136,7 @@ export function renderVariantA(state: HandoffState): string {
 
   lines.push(pc.bold(pc.green('╚══════════════════════════════════════════════════════════════════════════╝')));
 
-  // Center Relay Transfer Bar
+  // Animated Relay Transfer Bar
   lines.push('');
   lines.push('  ' + pc.dim(`[#${completed.number} ✔]`) + pc.cyan(' ═══════════( 🏃 BATON IN FLIGHT )═══════════▶ ') + pc.bold(pc.yellow(`[#${next.number} ⚙]`)));
   
@@ -176,27 +168,94 @@ export function renderVariantA(state: HandoffState): string {
   }
 
   lines.push(pc.bold(pc.cyan('└─────────────────────────────────────────────────────────────────────────┘')));
-  lines.push(pc.dim('  Controls: [Space] Launch Now  │  [p] Pause/Resume  │  [s] Skip  │  [q] Abort'));
+  lines.push(pc.dim('  Controls: [Space] Pause/Resume  │  [Enter] Launch Now  │  [s] Skip  │  [q] Abort'));
 
   return lines.join('\n');
 }
 
 /**
- * VARIANT B: Compact Stage Pipeline (Horizontal Stream & Fast Ticker)
- * 
- * Philosophy: Minimal terminal height footprint. Continuous stream-friendly
- * horizontal breadcrumbs with instantaneous ticker for high-velocity CI/CD or compact views.
+ * 2. CLACK WIZARD MODE (Interactive note card and spinner lifecycle)
  */
-export function renderVariantB(state: HandoffState): string {
+export function renderWizardMode(state: BatonHandoffPayload): string {
   const { completed, next, queueIndex, totalQueue, countdownSeconds, isPaused } = state;
   const lines: string[] = [];
 
-  const countdownText = isPaused ? pc.yellow('PAUSED') : `${countdownSeconds.toFixed(1)}s`;
+  const countdownText = isPaused ? pc.yellow('[PAUSED]') : pc.cyan(`${countdownSeconds.toFixed(1)}s`);
 
-  // 1-line completion stamp
+  lines.push(pc.green('✔') + ' ' + pc.bold(`Issue #${completed.number} closed successfully`) + ` in ${formatMs(completed.durationMs)} (PR #${completed.prNumber} merged, ${completed.testsPassed} tests passed)`);
+  lines.push('');
+  lines.push(pc.cyan('◆') + ' ' + pc.bold('Sandcastle Baton Handoff Note'));
+  lines.push(pc.cyan('│'));
+  lines.push(pc.cyan('│') + `  ${pc.bold('Completed:')}  #${completed.number} ${completed.title.substring(0, 48)}...`);
+  lines.push(pc.cyan('│') + `  ${pc.bold('Progress:')}   ${queueIndex}/${totalQueue} issues closed (${Math.round((queueIndex / totalQueue) * 100)}%)`);
+  lines.push(pc.cyan('│') + `  ${pc.bold('Next Up:')}    #${next.number} "${next.title.substring(0, 45)}..." ${pc.green('[READY]')}`);
+  if (next.parentIssue) {
+    lines.push(pc.cyan('│') + `  ${pc.bold('Parent:')}     #${next.parentIssue.number} (Child ${next.parentIssue.childIndex}/${next.parentIssue.totalChildren})`);
+  }
+  lines.push(pc.cyan('│') + `  ${pc.bold('Engine:')}     ${next.model} (${next.reasoningEffort} reasoning)`);
+  lines.push(pc.cyan('│'));
+  lines.push(pc.cyan('└') + ' ' + pc.dim(`Spooling next worker session in ${countdownText}... [Press Space to pause or Enter to start]`));
+  lines.push('');
+  lines.push(pc.cyan('◓') + ' ' + pc.dim(`[1/6 Inspecting] Fetching requirements for Issue #${next.number}...`));
+
+  return lines.join('\n');
+}
+
+/**
+ * 3. LIVE WATCH MONITOR MODE (Alternate-screen HUD with in-flight handoff box)
+ */
+export function renderWatchMode(state: BatonHandoffPayload): string {
+  const { completed, next, queueIndex, totalQueue, countdownSeconds, isPaused } = state;
+  const lines: string[] = [];
+
+  const progressPct = Math.round((queueIndex / totalQueue) * 100);
+  const countdownText = isPaused ? pc.yellow('[PAUSED]') : pc.yellow(pc.bold(`${countdownSeconds.toFixed(1)}s`));
+
+  // Header Bar
+  const title = pc.bold(pc.bgCyan(pc.black(' SANDCASTLE '))) + pc.bold(pc.cyan(' LIVE WATCH MONITOR '));
+  lines.push(`${title}  ${pc.gray('[Elapsed: 01:22]')}`);
+  lines.push(pc.gray('─'.repeat(74)));
+
+  // Statusline
+  const statusBadge = pc.bgBlue(pc.black(' BATON HANDOFF '));
+  lines.push(`  ${statusBadge}  ${pc.bold('Repo:')} ${pc.magenta('Vudattumaniteja/sandcastle-baton-demo')}  ${pc.bold('Session:')} ${pc.gray('baton-live-37')}`);
+  lines.push(`  ${pc.bold('Active:')} ${pc.yellow(`Handoff #${completed.number} ➔ #${next.number}`)}  │  ${pc.bold('Progress:')} ${queueIndex}/${totalQueue} closed  ${pc.cyan('████████')}${pc.gray('░░░░░░░░░░░░')} ${progressPct}%`);
+  lines.push('');
+
+  // In-flight Handoff Telemetry Card
+  lines.push(pc.bold(pc.white('┌─ 🏃 Baton In Flight ──────────────────────────────────────────────────┐')));
+  lines.push(`│  ${pc.green('✔ Last Completed:')} Issue #${completed.number} (${formatMs(completed.durationMs)} • PR #${completed.prNumber} • 100% green)`.padEnd(81) + '│');
+  lines.push(`│  ${pc.cyan('▶ Next Candidate:')}  Issue #${next.number} [READY] • ${next.model} (${next.reasoningEffort})`.padEnd(81) + '│');
+  if (next.parentIssue) {
+    lines.push(`│  ${pc.gray('↳ Parent Issue:')}   #${next.parentIssue.number} (Child ${next.parentIssue.childIndex}/${next.parentIssue.totalChildren})`.padEnd(81) + '│');
+  }
+  const countBar = pc.cyan('█'.repeat(12)) + pc.gray('░'.repeat(8));
+  lines.push(`│  ${pc.bold('⏱ Next Session:')}   Spooling in ${countdownText} [${countBar}]`.padEnd(89) + '│');
+  lines.push(pc.bold(pc.white('└───────────────────────────────────────────────────────────────────────┘')));
+
+  lines.push('');
+  lines.push(pc.bold(pc.white('┌─ Agent Reasoning / Status ────────────────────────────────────────────┐')));
+  lines.push(`│ ${pc.italic(pc.cyan('Finalizing git merge for PR #' + completed.prNumber + ' and verifying closure audit comment...'))}`.padEnd(84) + '│');
+  lines.push(`│ ${pc.dim('Preparing clean worker context for Issue #' + next.number + '...'.padEnd(68))}│`);
+  lines.push(pc.bold(pc.white('└───────────────────────────────────────────────────────────────────────┘')));
+
+  lines.push('');
+  lines.push(`  ${pc.bold('Model:')} ${pc.green(next.model)}  │  ${pc.bold('Quota:')} ${pc.cyan('████████')}${pc.gray('░░')} 88%  │  ${pc.bold('Tokens:')} 18.4k`);
+  lines.push(pc.gray('─'.repeat(74)));
+  lines.push(`  ${pc.bold('[Space]')} Pause   ${pc.bold('[Enter]')} Spool Now   ${pc.bold('[s]')} Skip   ${pc.bold('[q]')} Detach`);
+
+  return lines.join('\n');
+}
+
+/**
+ * 4. CI / STREAM MODE (Compact single-line stream with horizontal breadcrumbs)
+ */
+export function renderCiMode(state: BatonHandoffPayload): string {
+  const { completed, next, queueIndex, totalQueue } = state;
+  const lines: string[] = [];
+
   lines.push(pc.green('✔') + ' ' + pc.bold(`BATON COMPLETED: #${completed.number}`) + ` "${completed.title.substring(0, 38)}..." ` + pc.dim(`[${formatMs(completed.durationMs)} • PR #${completed.prNumber} merged • ${completed.testsPassed} tests green]`));
   
-  // Pipeline breadcrumbs
   const qList = [];
   for (let i = 1; i <= totalQueue; i++) {
     if (i < queueIndex) {
@@ -210,81 +269,26 @@ export function renderVariantB(state: HandoffState): string {
     }
   }
   lines.push(pc.gray('  Pipeline: ') + qList.join(pc.gray(' ──▶ ')) + pc.dim(` (${queueIndex}/${totalQueue})`));
-
-  // Ticker countdown
-  lines.push(pc.cyan('  >>> ') + pc.bold(`Transferring baton in ${countdownText}...`) + ' ' + pc.dim('[Space: Run now | s: Skip | q: Stop]'));
-
-  // 2-line target preview
+  lines.push(pc.cyan('  >>> ') + pc.bold(`Instant handoff to #${next.number}...`) + ' ' + pc.dim(`(CI mode: 0s pacing)`));
   lines.push(pc.magenta('  ↳ TARGET ') + pc.bold(`#${next.number}`) + ` "${next.title.substring(0, 48)}..." ` + pc.green(`[${next.gatingStatus}]`));
-  const parentTag = next.parentIssue ? `Parent #${next.parentIssue.number} (${next.parentIssue.childIndex}/${next.parentIssue.totalChildren}) • ` : '';
-  lines.push(pc.dim(`    ${parentTag}Model: ${next.model} (${next.reasoningEffort}) • Est: ~${next.estimatedDurationSeconds}s • 0 blockers`));
 
   return lines.join('\n');
 }
 
 /**
- * VARIANT C: Split-Pane Telemetry HUD (Two-Column Retrospective & Pre-flight Diagnostics)
- * 
- * Philosophy: Rich power-user HUD. Side-by-side retrospective analysis and pre-flight
- * verification checks with phase latency breakdown bars and active pacing bar.
+ * Master dispatcher by CLI surface
  */
-export function renderVariantC(state: HandoffState): string {
-  const { completed, next, countdownSeconds, isPaused } = state;
-  const lines: string[] = [];
-
-  const countdownText = isPaused ? pc.yellow('PAUSED') : `${countdownSeconds.toFixed(1)}s`;
-
-  lines.push(pc.bold(pc.white('┌─ 📊 Retrospective (#' + completed.number + ' Completed) ────────┬─ 🎯 Pre-flight Readiness (#' + next.number + ' Target) ─────┐')));
-
-  // Row 1
-  const left1 = ` Issue:    #${completed.number} (${formatMs(completed.durationMs)})`;
-  const right1 = ` Target:   #${next.number} ${pc.green('[READY]')}`;
-  lines.push(pc.white('│') + left1.padEnd(46) + pc.white('│') + right1.padEnd(46) + pc.white('│'));
-
-  // Row 2
-  const left2 = ` Branch:   ${completed.branchName || 'main'} (PR #${completed.prNumber})`;
-  const right2 = ` Title:    ${next.title.substring(0, 34)}...`;
-  lines.push(pc.white('│') + left2.padEnd(46) + pc.white('│') + right2.padEnd(46) + pc.white('│'));
-
-  // Row 3
-  const left3 = ` Quality:  ${completed.testsPassed}/${completed.testsTotal} green (${completed.tokensUsed} tok)`;
-  const right3 = next.parentIssue
-    ? ` Parent:   #${next.parentIssue.number} (Child ${next.parentIssue.childIndex}/${next.parentIssue.totalChildren})`
-    : ' Parent:   None (Root issue)';
-  lines.push(pc.white('│') + left3.padEnd(46) + pc.white('│') + right3.padEnd(46) + pc.white('│'));
-
-  // Row 4 - Phase breakdown vs Engine
-  const left4 = ` Phases:   Insp ${formatMs(completed.phaseBreakdown.inspectMs)} │ Impl ${formatMs(completed.phaseBreakdown.implementMs)}`;
-  const right4 = ` Model:    ${next.model} (${next.reasoningEffort})`;
-  lines.push(pc.white('│') + left4.padEnd(46) + pc.white('│') + right4.padEnd(46) + pc.white('│'));
-
-  // Row 5 - Verify breakdown vs Gating
-  const left5 = `           Test ${formatMs(completed.phaseBreakdown.testMs)} │ Git ${formatMs(completed.phaseBreakdown.gitPrMs)}`;
-  const right5 = ` Labels:   ${next.labels.slice(0, 2).join(', ')}`;
-  lines.push(pc.white('│') + left5.padEnd(46) + pc.white('│') + right5.padEnd(46) + pc.white('│'));
-
-  lines.push(pc.white('├──────────────────────────────────────────────┴──────────────────────────────────────────────┤'));
-  
-  const pacingBar = pc.cyan('█'.repeat(16)) + pc.gray('░'.repeat(8));
-  const footer = ` ◴ Passing Baton: ${countdownText} [${pacingBar}]  [Space] Launch  [p] Pause  [s] Skip `;
-  lines.push(pc.white('│') + footer.padEnd(101) + pc.white('│'));
-  lines.push(pc.bold(pc.white('└─────────────────────────────────────────────────────────────────────────────────────────────┘')));
-
-  return lines.join('\n');
-}
-
-/**
- * Master dispatcher rendering whatever variant is selected in state.
- */
-export function renderHandoffBanner(state: HandoffState): string {
-  switch (state.variant) {
-    case 'A':
-      return renderVariantA(state);
-    case 'B':
-      return renderVariantB(state);
-    case 'C':
-      return renderVariantC(state);
+export function renderHandoffBySurface(state: BatonHandoffPayload): string {
+  switch (state.mode) {
+    case 'run':
+      return renderRunMode(state);
+    case 'wizard':
+      return renderWizardMode(state);
+    case 'watch':
+      return renderWatchMode(state);
+    case 'ci':
+      return renderCiMode(state);
     default:
-      return renderVariantA(state);
+      return renderRunMode(state);
   }
 }

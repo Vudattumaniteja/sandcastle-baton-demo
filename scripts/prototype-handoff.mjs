@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 /**
- * PROTOTYPE RUNNER: Visual Baton Handoff Banners (Issue #37)
+ * PROTOTYPE RUNNER: Visual Baton Handoff across CLI Surfaces (Issue #37)
  * 
- * Run with: node scripts/prototype-handoff.mjs
- * Or: npm run prototype:handoff
+ * Simulates how the handoff banner displays across all 4 Sandcastle CLI execution surfaces:
+ * 1. 'run'    - Standard Headless / stdout stream with Relay Scorecard
+ * 2. 'wizard' - Clack interactive guided wizard TUI flow
+ * 3. 'watch'  - Alternate-screen Live Monitor HUD
+ * 4. 'ci'     - Compact single-line pipeline stream
+ * 
+ * Run with: npm run prototype:handoff
+ * Or: node scripts/prototype-handoff.mjs --mode=wizard
  */
 
 import readline from 'node:readline';
@@ -11,7 +17,7 @@ import pc from 'picocolors';
 
 const SCENARIOS = [
   {
-    name: 'Standard Sequential Handoff (#36 -> #37)',
+    name: 'Sequential Child Handoff (#36 -> #37 under Map #34)',
     queueIndex: 2,
     totalQueue: 5,
     completed: {
@@ -46,16 +52,16 @@ const SCENARIOS = [
       model: 'gemini-3.7-flash',
       reasoningEffort: 'high',
       acceptanceCriteria: [
-        { text: '3 distinct layout variants switchable via URL/CLI', done: true },
-        { text: 'Timing breakdown and countdown pacing indicator', done: true },
-        { text: 'Interactive CLI simulation switcher', done: false },
+        { text: 'Adaptive rendering across all 4 CLI operational surfaces', done: true },
+        { text: '3s pacing delay with Space pause and Enter fast-forward', done: true },
+        { text: 'Next candidate preview with acceptance criteria checkmarks', done: true },
       ],
       blockingDependencies: [],
       estimatedDurationSeconds: 45,
     },
   },
   {
-    name: 'Multi-Child Map Milestone (#35 -> #36)',
+    name: 'Parent Issue Map Initiation (#35 -> #36 under Map #34)',
     queueIndex: 1,
     totalQueue: 5,
     completed: {
@@ -99,7 +105,7 @@ const SCENARIOS = [
     },
   },
   {
-    name: 'Gated / Blocked Candidate Transition (#37 -> #38)',
+    name: 'Blocked Dependency Warning Gate (#37 -> #38)',
     queueIndex: 3,
     totalQueue: 5,
     completed: {
@@ -143,16 +149,23 @@ const SCENARIOS = [
   },
 ];
 
-let currentScenarioIndex = 0;
-let currentVariant = 'A';
-const cliArg = process.argv.find(arg => arg.startsWith('--variant=') || arg === '-v');
+const MODES = [
+  { id: 'run', name: '1. run CLI (Relay Scorecard)' },
+  { id: 'wizard', name: '2. wizard TUI (Clack Flow)' },
+  { id: 'watch', name: '3. watch Monitor (Alternate Screen)' },
+  { id: 'ci', name: '4. ci Stream (Compact Single-line)' },
+];
+
+let currentMode = 'run';
+const cliArg = process.argv.find(arg => arg.startsWith('--mode=') || arg.startsWith('-m='));
 if (cliArg) {
-  const v = cliArg.includes('=') ? cliArg.split('=')[1].toUpperCase() : process.argv[process.argv.indexOf(cliArg) + 1]?.toUpperCase();
-  if (['A', 'B', 'C'].includes(v)) {
-    currentVariant = v;
+  const m = cliArg.split('=')[1].toLowerCase();
+  if (['run', 'wizard', 'watch', 'ci'].includes(m)) {
+    currentMode = m;
   }
 }
 
+let currentScenarioIndex = 0;
 let countdownSeconds = 3.0;
 let isPaused = false;
 let showStateDump = false;
@@ -161,7 +174,7 @@ function formatMs(ms) {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-function renderVariantA(state) {
+function renderRun(state) {
   const { completed, next, queueIndex, totalQueue, countdown, paused } = state;
   const lines = [];
   const progressPct = Math.round((queueIndex / totalQueue) * 100);
@@ -215,10 +228,70 @@ function renderVariantA(state) {
   return lines.join('\n');
 }
 
-function renderVariantB(state) {
+function renderWizard(state) {
   const { completed, next, queueIndex, totalQueue, countdown, paused } = state;
   const lines = [];
-  const countdownText = paused ? pc.yellow('PAUSED') : `${countdown.toFixed(1)}s`;
+  const countdownText = paused ? pc.yellow('[PAUSED]') : pc.cyan(`${countdown.toFixed(1)}s`);
+
+  lines.push(pc.green('✔') + ' ' + pc.bold(`Issue #${completed.number} closed successfully`) + ` in ${formatMs(completed.durationMs)} (PR #${completed.prNumber} merged, ${completed.testsPassed} tests passed)`);
+  lines.push('');
+  lines.push(pc.cyan('◆') + ' ' + pc.bold('Sandcastle Baton Handoff Note'));
+  lines.push(pc.cyan('│'));
+  lines.push(pc.cyan('│') + `  ${pc.bold('Completed:')}  #${completed.number} ${completed.title.substring(0, 48)}...`);
+  lines.push(pc.cyan('│') + `  ${pc.bold('Progress:')}   ${queueIndex}/${totalQueue} issues closed (${Math.round((queueIndex / totalQueue) * 100)}%)`);
+  lines.push(pc.cyan('│') + `  ${pc.bold('Next Up:')}    #${next.number} "${next.title.substring(0, 45)}..." ${pc.green('[READY]')}`);
+  if (next.parentIssue) {
+    lines.push(pc.cyan('│') + `  ${pc.bold('Parent:')}     #${next.parentIssue.number} (Child ${next.parentIssue.childIndex}/${next.parentIssue.totalChildren})`);
+  }
+  lines.push(pc.cyan('│') + `  ${pc.bold('Engine:')}     ${next.model} (${next.reasoningEffort} reasoning)`);
+  lines.push(pc.cyan('│'));
+  lines.push(pc.cyan('└') + ' ' + pc.dim(`Spooling next worker session in ${countdownText}... [Press Space to pause or Enter to start]`));
+  lines.push('');
+  lines.push(pc.cyan('◓') + ' ' + pc.dim(`[1/6 Inspecting] Fetching requirements for Issue #${next.number}...`));
+
+  return lines.join('\n');
+}
+
+function renderWatch(state) {
+  const { completed, next, queueIndex, totalQueue, countdown, paused } = state;
+  const lines = [];
+  const progressPct = Math.round((queueIndex / totalQueue) * 100);
+  const countdownText = paused ? pc.yellow('[PAUSED]') : pc.yellow(pc.bold(`${countdown.toFixed(1)}s`));
+
+  const title = pc.bold(pc.bgCyan(pc.black(' SANDCASTLE '))) + pc.bold(pc.cyan(' LIVE WATCH MONITOR '));
+  lines.push(`${title}  ${pc.gray('[Elapsed: 01:22]')}`);
+  lines.push(pc.gray('─'.repeat(74)));
+
+  const statusBadge = pc.bgBlue(pc.black(' BATON HANDOFF '));
+  lines.push(`  ${statusBadge}  ${pc.bold('Repo:')} ${pc.magenta('Vudattumaniteja/sandcastle-baton-demo')}  ${pc.bold('Session:')} ${pc.gray('baton-live-37')}`);
+  lines.push(`  ${pc.bold('Active:')} ${pc.yellow(`Handoff #${completed.number} ➔ #${next.number}`)}  │  ${pc.bold('Progress:')} ${queueIndex}/${totalQueue} closed  ${pc.cyan('████████')}${pc.gray('░░░░░░░░░░░░')} ${progressPct}%`);
+  lines.push('');
+
+  lines.push(pc.bold(pc.white('┌─ 🏃 Baton In Flight ──────────────────────────────────────────────────┐')));
+  lines.push(`│  ${pc.green('✔ Last Completed:')} Issue #${completed.number} (${formatMs(completed.durationMs)} • PR #${completed.prNumber} • 100% green)`.padEnd(81) + '│');
+  lines.push(`│  ${pc.cyan('▶ Next Candidate:')}  Issue #${next.number} [READY] • ${next.model} (${next.reasoningEffort})`.padEnd(81) + '│');
+  if (next.parentIssue) {
+    lines.push(`│  ${pc.gray('↳ Parent Issue:')}   #${next.parentIssue.number} (Child ${next.parentIssue.childIndex}/${next.parentIssue.totalChildren})`.padEnd(81) + '│');
+  }
+  const countBar = pc.cyan('█'.repeat(12)) + pc.gray('░'.repeat(8));
+  lines.push(`│  ${pc.bold('⏱ Next Session:')}   Spooling in ${countdownText} [${countBar}]`.padEnd(89) + '│');
+  lines.push(pc.bold(pc.white('└───────────────────────────────────────────────────────────────────────┘')));
+
+  lines.push('');
+  lines.push(pc.bold(pc.white('┌─ Agent Reasoning / Status ────────────────────────────────────────────┐')));
+  lines.push(`│ ${pc.italic(pc.cyan('Finalizing git merge for PR #' + completed.prNumber + ' and verifying closure audit comment...'))}`.padEnd(84) + '│');
+  lines.push(`│ ${pc.dim('Preparing clean worker context for Issue #' + next.number + '...'.padEnd(68))}│`);
+  lines.push(pc.bold(pc.white('└───────────────────────────────────────────────────────────────────────┘')));
+
+  lines.push('');
+  lines.push(`  ${pc.bold('Model:')} ${pc.green(next.model)}  │  ${pc.bold('Quota:')} ${pc.cyan('████████')}${pc.gray('░░')} 88%  │  ${pc.bold('Tokens:')} 18.4k`);
+
+  return lines.join('\n');
+}
+
+function renderCi(state) {
+  const { completed, next, queueIndex, totalQueue } = state;
+  const lines = [];
 
   lines.push(pc.green('✔') + ' ' + pc.bold(`BATON COMPLETED: #${completed.number}`) + ` "${completed.title.substring(0, 38)}..." ` + pc.dim(`[${formatMs(completed.durationMs)} • PR #${completed.prNumber} merged • ${completed.testsPassed} tests green]`));
   
@@ -235,50 +308,8 @@ function renderVariantB(state) {
     }
   }
   lines.push(pc.gray('  Pipeline: ') + qList.join(pc.gray(' ──▶ ')) + pc.dim(` (${queueIndex}/${totalQueue})`));
-  lines.push(pc.cyan('  >>> ') + pc.bold(`Transferring baton in ${countdownText}...`) + ' ' + pc.dim('[Space: Pause/Resume | s: Next Scenario | q: Quit]'));
-
+  lines.push(pc.cyan('  >>> ') + pc.bold(`Instant handoff to #${next.number}...`) + ' ' + pc.dim(`(CI mode: 0s pacing)`));
   lines.push(pc.magenta('  ↳ TARGET ') + pc.bold(`#${next.number}`) + ` "${next.title.substring(0, 48)}..." ` + pc.green(`[${next.gatingStatus}]`));
-  const parentTag = next.parentIssue ? `Parent #${next.parentIssue.number} (${next.parentIssue.childIndex}/${next.parentIssue.totalChildren}) • ` : '';
-  lines.push(pc.dim(`    ${parentTag}Model: ${next.model} (${next.reasoningEffort}) • Est: ~${next.estimatedDurationSeconds}s • 0 blockers`));
-
-  return lines.join('\n');
-}
-
-function renderVariantC(state) {
-  const { completed, next, countdown, paused } = state;
-  const lines = [];
-  const countdownText = paused ? pc.yellow('PAUSED') : `${countdown.toFixed(1)}s`;
-
-  lines.push(pc.bold(pc.white('┌─ 📊 Retrospective (#' + completed.number + ' Completed) ────────┬─ 🎯 Pre-flight Readiness (#' + next.number + ' Target) ─────┐')));
-
-  const left1 = ` Issue:    #${completed.number} (${formatMs(completed.durationMs)})`;
-  const right1 = ` Target:   #${next.number} ${pc.green('[READY]')}`;
-  lines.push(pc.white('│') + left1.padEnd(46) + pc.white('│') + right1.padEnd(46) + pc.white('│'));
-
-  const left2 = ` Branch:   ${completed.branchName || 'main'} (PR #${completed.prNumber})`;
-  const right2 = ` Title:    ${next.title.substring(0, 34)}...`;
-  lines.push(pc.white('│') + left2.padEnd(46) + pc.white('│') + right2.padEnd(46) + pc.white('│'));
-
-  const left3 = ` Quality:  ${completed.testsPassed}/${completed.testsTotal} green (${completed.tokensUsed} tok)`;
-  const right3 = next.parentIssue
-    ? ` Parent:   #${next.parentIssue.number} (Child ${next.parentIssue.childIndex}/${next.parentIssue.totalChildren})`
-    : ' Parent:   None (Root issue)';
-  lines.push(pc.white('│') + left3.padEnd(46) + pc.white('│') + right3.padEnd(46) + pc.white('│'));
-
-  const left4 = ` Phases:   Insp ${formatMs(completed.phaseBreakdown.inspectMs)} │ Impl ${formatMs(completed.phaseBreakdown.implementMs)}`;
-  const right4 = ` Model:    ${next.model} (${next.reasoningEffort})`;
-  lines.push(pc.white('│') + left4.padEnd(46) + pc.white('│') + right4.padEnd(46) + pc.white('│'));
-
-  const left5 = `           Test ${formatMs(completed.phaseBreakdown.testMs)} │ Git ${formatMs(completed.phaseBreakdown.gitPrMs)}`;
-  const right5 = ` Labels:   ${next.labels.slice(0, 2).join(', ')}`;
-  lines.push(pc.white('│') + left5.padEnd(46) + pc.white('│') + right5.padEnd(46) + pc.white('│'));
-
-  lines.push(pc.white('├──────────────────────────────────────────────┴──────────────────────────────────────────────┤'));
-  
-  const pacingBar = pc.cyan('█'.repeat(16)) + pc.gray('░'.repeat(8));
-  const footer = ` ◴ Passing Baton: ${countdownText} [${pacingBar}]  [Space] Pause  [n] Scenario  [d] State `;
-  lines.push(pc.white('│') + footer.padEnd(101) + pc.white('│'));
-  lines.push(pc.bold(pc.white('└─────────────────────────────────────────────────────────────────────────────────────────────┘')));
 
   return lines.join('\n');
 }
@@ -287,45 +318,48 @@ function renderScreen() {
   const scenario = SCENARIOS[currentScenarioIndex];
   const state = {
     ...scenario,
-    variant: currentVariant,
+    mode: currentMode,
     countdown: countdownSeconds,
     paused: isPaused,
   };
 
   console.clear();
-  console.log(pc.bold(pc.bgMagenta(pc.black(' SANDCASTLE PROTOTYPE '))) + pc.bold(pc.cyan(' — BATON HANDOFF BANNER EXPLORER (Issue #37)')));
+  console.log(pc.bold(pc.bgMagenta(pc.black(' SANDCASTLE '))) + pc.bold(pc.cyan(' — BATON HANDOFF ARCHITECTURE PROTOTYPE (Issue #37)')));
   console.log(pc.gray('━'.repeat(78)));
   
-  const variantPills = ['A', 'B', 'C'].map(v => {
-    const isCur = v === currentVariant;
-    const name = v === 'A' ? 'Scorecard' : v === 'B' ? 'Compact Pipeline' : 'Split HUD';
-    return isCur ? pc.bgCyan(pc.black(` [${v}] ${name} `)) : pc.dim(` [${v}] ${name} `);
-  }).join('  ');
+  const modePills = MODES.map(m => {
+    const isCur = m.id === currentMode;
+    return isCur ? pc.bgCyan(pc.black(` [${m.id}] ${m.name.split('(')[0].trim()} `)) : pc.dim(` [${m.id}] `);
+  }).join(' ');
 
-  console.log(`Active Variant: ${variantPills}`);
+  console.log(`CLI Surface Mode: ${modePills}`);
   console.log(pc.yellow(`Active Scenario [${currentScenarioIndex + 1}/${SCENARIOS.length}]: `) + pc.bold(scenario.name));
   console.log(pc.gray('─'.repeat(78)));
   console.log('');
 
-  if (currentVariant === 'A') {
-    console.log(renderVariantA(state));
-  } else if (currentVariant === 'B') {
-    console.log(renderVariantB(state));
+  if (currentMode === 'run') {
+    console.log(renderRun(state));
+  } else if (currentMode === 'wizard') {
+    console.log(renderWizard(state));
+  } else if (currentMode === 'watch') {
+    console.log(renderWatch(state));
   } else {
-    console.log(renderVariantC(state));
+    console.log(renderCi(state));
   }
 
   console.log('');
   console.log(pc.gray('─'.repeat(78)));
   console.log(`  ${pc.bold('Keyboard Shortcuts:')}
-    [1 / 2 / 3] or [← / →] : Switch Variant (A: Scorecard, B: Pipeline, C: Split HUD)
-    [n / Space]            : Next Scenario / Pause Countdown
-    [d]                    : Toggle Full State Dump (${showStateDump ? pc.green('ON') : pc.dim('OFF')})
-    [q / Ctrl+C]           : Exit Prototype`);
+    [1 / 2 / 3 / 4] or [← / →] : Switch Surface (1: run, 2: wizard, 3: watch, 4: ci)
+    [Space / p]                : Pause / Resume Countdown (${isPaused ? pc.yellow('PAUSED') : pc.green('RUNNING')})
+    [Enter]                    : Spool Next Worker Immediately (Fast-Forward)
+    [n]                        : Switch Test Scenario (${currentScenarioIndex + 1}/${SCENARIOS.length})
+    [d]                        : Toggle Full State Dump (${showStateDump ? pc.green('ON') : pc.dim('OFF')})
+    [q / Ctrl+C]               : Exit Prototype`);
 
   if (showStateDump) {
     console.log('');
-    console.log(pc.bold(pc.yellow('--- Current Prototype State Dump ---')));
+    console.log(pc.bold(pc.yellow('--- Current Baton Handoff State Dump ---')));
     console.log(JSON.stringify(state, null, 2));
   }
 }
@@ -347,29 +381,37 @@ if (process.stdin.isTTY) {
       process.exit(0);
     }
 
-    if (key.name === '1' || str === 'a' || str === 'A') {
-      currentVariant = 'A';
+    if (key.name === '1' || str === '1') {
+      currentMode = 'run';
       renderScreen();
-    } else if (key.name === '2' || str === 'b' || str === 'B') {
-      currentVariant = 'B';
+    } else if (key.name === '2' || str === '2') {
+      currentMode = 'wizard';
       renderScreen();
-    } else if (key.name === '3' || str === 'c' || str === 'C') {
-      currentVariant = 'C';
+    } else if (key.name === '3' || str === '3') {
+      currentMode = 'watch';
+      renderScreen();
+    } else if (key.name === '4' || str === '4') {
+      currentMode = 'ci';
       renderScreen();
     } else if (key.name === 'left') {
-      const order = ['A', 'B', 'C'];
-      const idx = order.indexOf(currentVariant);
-      currentVariant = order[(idx - 1 + order.length) % order.length];
+      const modeKeys = ['run', 'wizard', 'watch', 'ci'];
+      const idx = modeKeys.indexOf(currentMode);
+      currentMode = modeKeys[(idx - 1 + modeKeys.length) % modeKeys.length];
       renderScreen();
     } else if (key.name === 'right') {
-      const order = ['A', 'B', 'C'];
-      const idx = order.indexOf(currentVariant);
-      currentVariant = order[(idx + 1) % order.length];
+      const modeKeys = ['run', 'wizard', 'watch', 'ci'];
+      const idx = modeKeys.indexOf(currentMode);
+      currentMode = modeKeys[(idx + 1) % modeKeys.length];
       renderScreen();
     } else if (key.name === 'space' || key.name === 'p') {
       isPaused = !isPaused;
       renderScreen();
-    } else if (key.name === 'n' || key.name === 'return') {
+    } else if (key.name === 'return') {
+      // Fast forward to next issue
+      countdownSeconds = 3.0;
+      currentScenarioIndex = (currentScenarioIndex + 1) % SCENARIOS.length;
+      renderScreen();
+    } else if (key.name === 'n') {
       currentScenarioIndex = (currentScenarioIndex + 1) % SCENARIOS.length;
       countdownSeconds = 3.0;
       renderScreen();
@@ -380,7 +422,7 @@ if (process.stdin.isTTY) {
   });
 
   const timer = setInterval(() => {
-    if (!isPaused) {
+    if (!isPaused && currentMode !== 'ci') {
       countdownSeconds -= 0.2;
       if (countdownSeconds <= 0) {
         countdownSeconds = 3.0;
