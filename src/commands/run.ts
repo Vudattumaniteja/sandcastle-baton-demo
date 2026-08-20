@@ -14,6 +14,7 @@ export interface RunCommandOptions {
   json?: boolean;
   quiet?: boolean;
   repo?: string;
+  promptTemplate?: string;
   cwd?: string;
 }
 
@@ -49,6 +50,7 @@ export async function runCommand(
     autoPr: options.autoPr,
     autoMerge: options.autoMerge,
     repo: options.repo,
+    promptTemplate: options.promptTemplate,
     cwd: options.cwd,
   };
 
@@ -98,7 +100,24 @@ export async function runCommand(
     });
   }
 
-  const result = await runner.run();
+  let result: BatonFinishPayload;
+  try {
+    result = await runner.run();
+  } catch (err: any) {
+    if (options.json) {
+      console.log(
+        JSON.stringify(
+          { success: false, error: err?.message || String(err) },
+          null,
+          2
+        )
+      );
+    } else {
+      console.error(pc.red(`\n✖ Error: ${err?.message || err}`));
+    }
+    process.exit(1);
+    return;
+  }
 
   if (options.json) {
     console.log(JSON.stringify(result, null, 2));

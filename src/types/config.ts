@@ -9,6 +9,7 @@ export interface SandcastleConfig {
   repo?: string;
   parentLabels?: string[];
   hitlLabels?: string[];
+  promptTemplate?: string;
 }
 
 export type ConfigKey = keyof SandcastleConfig;

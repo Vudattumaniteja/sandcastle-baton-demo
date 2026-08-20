@@ -420,5 +420,70 @@ describe('BatonRunner & Worker Prompt Construction', () => {
 
       consoleSpy.mockRestore();
     });
+
+    it('should interpolate custom prompt template when specified in BatonRunner options', async () => {
+      const templatePath = path.join(tempDir, 'custom-worker-prompt.md');
+      fs.writeFileSync(
+        templatePath,
+        'Custom prompt for #{{issue.number}}: {{issue.title}} on repo {{repo}} under branch {{branch.name}}'
+      );
+
+      const mockIssue: GitHubIssue = {
+        number: 42,
+        title: 'Prompt Engine Support',
+        body: 'Part of #40',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+        url: 'https://github.com/owner/repo/issues/42',
+      };
+
+      const mockGitHubService = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn().mockResolvedValue(mockIssue),
+        closeIssue: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const mockGatingEvaluator = {
+        evaluateIssue: vi.fn().mockResolvedValue({
+          issueNumber: 42,
+          title: 'Prompt Engine Support',
+          state: 'OPEN',
+          status: 'READY',
+          isReady: true,
+          reasons: ['Ready'],
+        }),
+      };
+
+      let executedPrompt = '';
+      const mockProcessSupervisor = {
+        execute: vi.fn().mockImplementation((workerOptions) => {
+          executedPrompt = workerOptions.prompt;
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 500,
+          });
+        }),
+      };
+
+      const runner = new BatonRunner({
+        repo: 'owner/repo',
+        issues: [42],
+        promptTemplate: templatePath,
+        githubService: mockGitHubService as any,
+        gatingEvaluator: mockGatingEvaluator as any,
+        processSupervisor: mockProcessSupervisor as any,
+        stateFilePath,
+        mode: 'afk',
+      });
+
+      const result = await runner.run();
+
+      expect(result.success).toBe(true);
+      expect(mockProcessSupervisor.execute).toHaveBeenCalledTimes(1);
+      expect(executedPrompt).toContain('Custom prompt for #42: Prompt Engine Support on repo owner/repo');
+      expect(executedPrompt).toContain('under branch issue-42-prompt-engine-support');
+    });
   });
 });

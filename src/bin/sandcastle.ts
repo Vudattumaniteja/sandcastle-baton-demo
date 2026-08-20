@@ -53,6 +53,7 @@ program
   .option('--retries <N>', 'Max retry attempts per issue', '2')
   .option('--auto-pr', 'Automatically create Pull Request upon verified tests', true)
   .option('--auto-merge', 'Automatically merge Pull Request upon creation', true)
+  .option('--prompt-template <path>', 'Path to custom markdown prompt template')
   .option('--json', 'Output structured JSON format')
   .option('--quiet', 'Suppress non-essential progress output')
   .action(async (issue, options) => {

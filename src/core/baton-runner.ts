@@ -13,28 +13,25 @@ import { AntigravityService } from '../services/antigravity-service.js';
 import { ConfigService } from '../services/config-service.js';
 import { GatingEvaluator } from './gating-evaluator.js';
 import { ProcessSupervisor } from './process-supervisor.js';
+import {
+  PromptTemplateEngine,
+  DEFAULT_WORKER_PROMPT_TEMPLATE,
+} from './prompt-template.js';
+import type { TemplateContext } from './prompt-template.js';
 
 export function buildDefaultWorkerPrompt(
   repo: string,
   issueNumber: number,
   issueUrl?: string
 ): string {
+  const engine = new PromptTemplateEngine();
   const url = issueUrl || `https://github.com/${repo}/issues/${issueNumber}`;
-  return [
-    `You are an autonomous AI coding agent executing a Sandcastle issue baton for issue #${issueNumber}.`,
-    '',
-    `Issue URL: ${url}`,
-    '',
-    `Instructions:`,
-    `1. Fetch and read the full issue requirements and acceptance criteria using \`gh issue view ${issueNumber} --comments\`.`,
-    `2. Inspect the codebase context (CONTEXT.md, AGENTS.md, existing test suites).`,
-    `3. Follow the \`implement\` and \`tdd\` skills to write minimal, clean code satisfying the acceptance criteria test-first.`,
-    `4. Run all local test suites and linters until 100% green.`,
-    `5. Create a git branch \`issue-${issueNumber}-<slug>\`, commit changes with conventional commit messages referencing \`#${issueNumber}\`.`,
-    `6. Open a Pull Request referencing \`#${issueNumber}\` using \`gh pr create\`.`,
-    `7. Merge the Pull Request using \`gh pr merge --merge\` (or squash).`,
-    `8. Close issue \`#${issueNumber}\` with \`gh issue close ${issueNumber} --comment "Completed autonomously via Sandcastle baton. Verified green tests."\`.`,
-  ].join('\n');
+  return engine.interpolate(DEFAULT_WORKER_PROMPT_TEMPLATE, {
+    issue: {
+      number: issueNumber,
+      url,
+    },
+  });
 }
 
 export class BatonRunner extends EventEmitter {
@@ -43,6 +40,7 @@ export class BatonRunner extends EventEmitter {
   private antigravityService: AntigravityService;
   private gatingEvaluator: GatingEvaluator;
   private processSupervisor: ProcessSupervisor;
+  private promptTemplateEngine: PromptTemplateEngine;
   private configService: ConfigService;
   private stateFilePath: string;
 
@@ -51,6 +49,8 @@ export class BatonRunner extends EventEmitter {
     this.options = options;
     const cwd = options.cwd ?? process.cwd();
     this.configService = options.configService ?? new ConfigService({ cwd });
+    this.promptTemplateEngine =
+      options.promptTemplateEngine ?? new PromptTemplateEngine({ cwd });
 
     this.githubService =
       options.githubService ?? new GitHubService({ repo: options.repo });
@@ -273,11 +273,69 @@ export class BatonRunner extends EventEmitter {
         continue;
       }
 
-      // Live Execution with ProcessSupervisor
-      const workerPrompt = buildDefaultWorkerPrompt(
-        targetRepo,
+      // Live Execution with ProcessSupervisor & PromptTemplateEngine
+      const { template: rawTemplate } = this.promptTemplateEngine.loadTemplate(
+        this.options.promptTemplate,
+        config.promptTemplate
+      );
+
+      const labelsList = (issue.labels || []).map((l: any) =>
+        typeof l === 'string' ? l : l.name || ''
+      );
+      const [repoOwner, repoName] = targetRepo.includes('/')
+        ? targetRepo.split('/')
+        : ['', targetRepo];
+      const titleSlug = (issue.title || '')
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .substring(0, 30);
+      const branchName = `issue-${issueNumber}-${titleSlug || 'worker'}`;
+
+      const parentMatch =
+        issue.body?.match(/Part of #(\d+)/i) ||
+        issue.body?.match(/Parent:\s*#(\d+)/i);
+      const parentNumber = parentMatch ? parseInt(parentMatch[1], 10) : undefined;
+
+      const templateContext: TemplateContext = {
+        issue: {
+          number: issueNumber,
+          title: issue.title,
+          body: issue.body || '',
+          url: issue.url || `https://github.com/${targetRepo}/issues/${issueNumber}`,
+          labels: labelsList,
+          state: issue.state || 'OPEN',
+        },
+        repo: {
+          name: repoName,
+          owner: repoOwner,
+          full: targetRepo,
+        },
+        branch: {
+          name: branchName,
+        },
+        parent: parentNumber
+          ? {
+              number: parentNumber,
+              title: '',
+              url: `https://github.com/${targetRepo}/issues/${parentNumber}`,
+            }
+          : undefined,
+        retry: {
+          attempt: 1,
+          maxAttempts,
+          feedback: '',
+        },
         issueNumber,
-        issue.url
+        issueTitle: issue.title,
+        issueBody: issue.body || '',
+        issueUrl: issue.url || `https://github.com/${targetRepo}/issues/${issueNumber}`,
+        branchName,
+      };
+
+      const workerPrompt = this.promptTemplateEngine.interpolate(
+        rawTemplate,
+        templateContext
       );
 
       this.emit('worker:phase', {

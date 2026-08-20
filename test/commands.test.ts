@@ -193,6 +193,27 @@ describe('POSIX Headless Commands (doctor, status, config, run)', () => {
         })
       );
     });
+
+    it('should pass promptTemplate option to runner and handle runner errors by exiting with code 1', async () => {
+      const mockRunner = {
+        run: vi.fn().mockRejectedValue(new Error('Explicit prompt template not found on disk: ./missing.md')),
+        on: vi.fn(),
+      };
+
+      const runnerFactory = vi.fn().mockReturnValue(mockRunner);
+
+      await runCommand('42', {
+        promptTemplate: './missing.md',
+        json: true,
+      }, runnerFactory);
+
+      expect(runnerFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          promptTemplate: './missing.md',
+        })
+      );
+      expect(processExitSpy).toHaveBeenCalledWith(1);
+    });
   });
 
   describe('watch command', () => {
