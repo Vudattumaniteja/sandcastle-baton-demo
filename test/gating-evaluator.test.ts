@@ -52,6 +52,28 @@ Prerequisites: #22, #23
 `;
       expect(evaluator.parsePrerequisites(sample)).toEqual([22, 23]);
     });
+
+    it('should parse various forms of parent and epic references', () => {
+      const sample = `
+Part of #40
+Parent: #41
+Parent Issue: #42
+Epic: #43
+Epic #44
+`;
+      expect(evaluator.parseParentReferences(sample)).toEqual([40, 41, 42, 43, 44]);
+    });
+
+    it('should exclude parent/epic references from prerequisite blockers', () => {
+      const sample = `
+Part of #40
+Blocked by: #22, #40
+`;
+      const parentRefs = evaluator.parseParentReferences(sample);
+      const prereqs = evaluator.parsePrerequisites(sample).filter((p) => !parentRefs.includes(p));
+      expect(parentRefs).toEqual([40]);
+      expect(prereqs).toEqual([22]);
+    });
   });
 
   describe('Single Issue Evaluation', () => {
@@ -166,6 +188,71 @@ Prerequisites: #22, #23
       expect(evaluation.status).toBe('CLOSED');
       expect(evaluation.isReady).toBe(false);
     });
+
+    it('should evaluate an issue as PARENT when parent or epic label is present', async () => {
+      const parentIssue1: GitHubIssue = {
+        number: 40,
+        title: 'Epic: Sandcastle Autonomous Baton Phase 2',
+        body: 'Parent epic specification',
+        state: 'OPEN',
+        labels: [{ name: 'epic' }],
+      };
+
+      const eval1 = await evaluator.evaluateIssue(parentIssue1);
+      expect(eval1.status).toBe('PARENT');
+      expect(eval1.isReady).toBe(false);
+      expect(eval1.reasons[0]).toContain('parent');
+
+      const parentIssue2: GitHubIssue = {
+        number: 41,
+        title: 'Map: Navigation Architecture',
+        body: '',
+        state: 'OPEN',
+        labels: ['wayfinder:map'],
+      };
+
+      const eval2 = await evaluator.evaluateIssue(parentIssue2);
+      expect(eval2.status).toBe('PARENT');
+      expect(eval2.isReady).toBe(false);
+    });
+
+    it('should evaluate an issue as HITL when human-in-the-loop labels are present', async () => {
+      const hitlIssue: GitHubIssue = {
+        number: 42,
+        title: 'Grilling: Clarify Gating Protocol',
+        body: 'Interactive interview required',
+        state: 'OPEN',
+        labels: ['wayfinder:grilling', 'ready-for-agent', 'AFK'],
+      };
+
+      const evaluation = await evaluator.evaluateIssue(hitlIssue);
+      expect(evaluation.status).toBe('HITL');
+      expect(evaluation.isReady).toBe(false);
+      expect(evaluation.reasons[0]).toContain('human-in-the-loop');
+    });
+
+    it('should allow child issues to run while parent issues remain open (non-blocking parent resolution)', async () => {
+      const childIssue: GitHubIssue = {
+        number: 43,
+        title: 'feat: Child Feature',
+        body: 'Part of #40\nBlocked by: #22',
+        state: 'OPEN',
+        labels: ['ready-for-agent', 'AFK'],
+      };
+
+      mockGitHubService.getIssue.mockResolvedValueOnce({
+        number: 22,
+        title: 'feat: Foundation',
+        state: 'CLOSED',
+        labels: [],
+      });
+
+      const evaluation = await evaluator.evaluateIssue(childIssue);
+      expect(evaluation.status).toBe('READY');
+      expect(evaluation.isReady).toBe(true);
+      expect(evaluation.prerequisiteIssueNumbers).toEqual([22]);
+      expect(evaluation.blockingIssueNumbers).toEqual([]);
+    });
   });
 
   describe('Backlog Evaluation', () => {
@@ -206,6 +293,27 @@ Prerequisites: #22, #23
           state: 'OPEN',
           labels: ['ready-for-agent'], // ungated
         },
+        {
+          number: 40,
+          title: 'Epic: Architecture',
+          body: 'Structural specification',
+          state: 'OPEN',
+          labels: ['epic'],
+        },
+        {
+          number: 41,
+          title: 'Child Task',
+          body: 'Part of #40',
+          state: 'OPEN',
+          labels: ['ready-for-agent', 'AFK'],
+        },
+        {
+          number: 42,
+          title: 'HITL Task',
+          body: '',
+          state: 'OPEN',
+          labels: ['wayfinder:prototype'],
+        },
       ];
 
       const evaluations = await evaluator.evaluateBacklog(backlog);
@@ -216,6 +324,9 @@ Prerequisites: #22, #23
       expect(evaluations.get(3)?.blockingIssueNumbers).toEqual([2]);
       expect(evaluations.get(4)?.status).toBe('BLOCKED');
       expect(evaluations.get(5)?.status).toBe('UNGATED');
+      expect(evaluations.get(40)?.status).toBe('PARENT');
+      expect(evaluations.get(41)?.status).toBe('READY');
+      expect(evaluations.get(42)?.status).toBe('HITL');
 
       // Verified in-memory resolution did not need extra getIssue calls
       expect(mockGitHubService.getIssue).not.toHaveBeenCalled();

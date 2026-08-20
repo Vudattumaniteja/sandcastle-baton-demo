@@ -39,8 +39,14 @@ export async function wizardCommand(
   const githubService = deps.githubService ?? new GitHubService();
   const antigravityService = deps.antigravityService ?? new AntigravityService();
   const doctorService = deps.doctorService ?? new DoctorService({ cwd });
+  const resolvedConfig = configService.resolve();
   const gatingEvaluator =
-    deps.gatingEvaluator ?? new GatingEvaluator({ githubService });
+    deps.gatingEvaluator ??
+    new GatingEvaluator({
+      githubService,
+      parentLabels: resolvedConfig.parentLabels,
+      hitlLabels: resolvedConfig.hitlLabels,
+    });
 
   // 1. Intro Banner
   prompts.intro(pc.bold(pc.cyan('Sandcastle Autonomous Issue Baton Wizard')));

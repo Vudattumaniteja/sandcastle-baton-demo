@@ -56,9 +56,14 @@ export class BatonRunner extends EventEmitter {
       options.githubService ?? new GitHubService({ repo: options.repo });
     this.antigravityService =
       options.antigravityService ?? new AntigravityService();
+    const resolvedConfig = this.configService.resolve(options);
     this.gatingEvaluator =
       options.gatingEvaluator ??
-      new GatingEvaluator({ githubService: this.githubService });
+      new GatingEvaluator({
+        githubService: this.githubService,
+        parentLabels: resolvedConfig.parentLabels,
+        hitlLabels: resolvedConfig.hitlLabels,
+      });
     this.processSupervisor =
       options.processSupervisor ??
       new ProcessSupervisor({
@@ -188,6 +193,17 @@ export class BatonRunner extends EventEmitter {
 
       const evaluation = await this.gatingEvaluator.evaluateIssue(issue, targetRepo);
       this.emit('baton:gating', { issueNumber, evaluation });
+
+      if (evaluation.status === 'PARENT' || evaluation.status === 'HITL') {
+        console.log(`[SKIP] Skipping parent/HITL issue #${issueNumber}`);
+        processedIssues.push({
+          number: issueNumber,
+          title: issue.title,
+          status: 'skipped',
+          durationMs: 0,
+        });
+        continue;
+      }
 
       if (!evaluation.isReady) {
         const reason = evaluation.reasons.join('; ') || 'Issue gates not satisfied';

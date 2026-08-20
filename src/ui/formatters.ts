@@ -21,6 +21,10 @@ export function formatGatingBadge(status: GatingStatus): string {
       return pc.dim('[UNGATED]');
     case 'CLOSED':
       return pc.gray('[CLOSED]');
+    case 'PARENT':
+      return pc.magenta(pc.bold('[PARENT]'));
+    case 'HITL':
+      return pc.cyan(pc.bold('[HITL]'));
     default:
       return pc.dim(`[${status}]`);
   }
@@ -46,6 +50,10 @@ export function formatIssueOption(
     hint = `Blocked: ${evaluation.reasons[0] || 'status blocked'}`;
   } else if (evaluation.status === 'CLOSED') {
     hint = 'Already closed';
+  } else if (evaluation.status === 'PARENT') {
+    hint = 'Parent/epic specification (skipped in baton)';
+  } else if (evaluation.status === 'HITL') {
+    hint = 'Human-in-the-loop required (skipped in baton)';
   }
 
   return {

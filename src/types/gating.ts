@@ -1,6 +1,13 @@
 import type { GitHubIssue } from './github.js';
 
-export type GatingStatus = 'READY' | 'WAITING' | 'BLOCKED' | 'UNGATED' | 'CLOSED';
+export type GatingStatus =
+  | 'READY'
+  | 'WAITING'
+  | 'BLOCKED'
+  | 'UNGATED'
+  | 'CLOSED'
+  | 'PARENT'
+  | 'HITL';
 
 export interface GatingEvaluation {
   issueNumber: number;
@@ -15,6 +22,7 @@ export interface GatingEvaluation {
   prerequisiteIssueNumbers: number[];
   blockingIssueNumbers: number[];
   reasons: string[];
+  parentIssueNumbers?: number[];
 }
 
 export interface BlockerReportOptions {

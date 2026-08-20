@@ -7,6 +7,8 @@ export interface SandcastleConfig {
   autoPr?: boolean;
   autoMerge?: boolean;
   repo?: string;
+  parentLabels?: string[];
+  hitlLabels?: string[];
 }
 
 export type ConfigKey = keyof SandcastleConfig;
