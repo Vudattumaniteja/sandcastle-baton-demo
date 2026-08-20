@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sandcastle — Baton Handoff CLI Architecture Prototype (Issue #37)</title>
+  <title>Sandcastle — Baton Handoff CLI Prototype (Issue #37)</title>
   <style>
     :root {
       --bg: #0d1117;
@@ -15,7 +15,6 @@
       --green: #22c55e;
       --yellow: #eab308;
       --red: #ef4444;
-      --magenta: #d946ef;
       --accent: #6366f1;
       --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
       --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -50,9 +49,9 @@
       border-radius: 9999px;
       font-size: 12px;
       font-weight: 600;
-      background: rgba(99, 102, 241, 0.15);
-      color: #818cf8;
-      border: 1px solid rgba(99, 102, 241, 0.3);
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
       margin-bottom: 8px;
     }
 
@@ -71,9 +70,9 @@
     }
 
     .prototype-notice {
-      background: #1f1a10;
-      border: 1px solid #6e4b09;
-      color: #fce18b;
+      background: #151e28;
+      border: 1px solid #1e3a5f;
+      color: #93c5fd;
       padding: 10px 14px;
       border-radius: 6px;
       font-size: 13px;
@@ -247,7 +246,6 @@
     .c-cyan { color: var(--cyan); }
     .c-yellow { color: var(--yellow); }
     .c-red { color: var(--red); }
-    .c-magenta { color: var(--magenta); }
     .c-dim { color: var(--text-muted); }
     .c-bold { font-weight: 700; }
 
@@ -376,10 +374,10 @@
     <div class="badge">SANDCASTLE CLI ARCHITECTURE PROTOTYPE • ISSUE #37</div>
     <h1>Visual Baton Handoff across 4 CLI Surfaces</h1>
     <p class="subtitle">
-      Demonstrates how baton handoffs adaptively render across <code>sandcastle run</code>, interactive <code>wizard</code>, live <code>watch</code> monitor, and CI/CD stream pipelines.
+      Demonstrates how baton handoffs adaptively render across <code>wizard</code> (Clack TUI), <code>run</code> (CLI stdout), <code>watch</code> monitor, and CI stream pipelines.
     </p>
     <div class="prototype-notice">
-      <span>⚠️ <strong>Architecture Prototype:</strong> Switch between CLI execution surfaces below or via URL <code>?mode=run|wizard|watch|ci</code>.</span>
+      <span>💡 <strong>Finalized Pattern:</strong> Selected <code>wizard</code> Clack flow as primary default. Switch surfaces below or via URL <code>?mode=wizard|run|watch|ci</code>.</span>
     </div>
   </header>
 
@@ -387,13 +385,13 @@
 
     <!-- Surface Mode Cards -->
     <div class="surface-tabs">
-      <div class="surface-tab active" id="tab-run" onclick="setMode('run')">
-        <div class="surface-title">1. run CLI <span class="c-cyan">●</span></div>
-        <div class="surface-desc">Headless stdout with Relay Scorecard & target preview.</div>
+      <div class="surface-tab active" id="tab-wizard" onclick="setMode('wizard')">
+        <div class="surface-title">1. wizard TUI (Clack) <span class="c-cyan">●</span></div>
+        <div class="surface-desc">@clack/prompts step transition note & spinner flow.</div>
       </div>
-      <div class="surface-tab" id="tab-wizard" onclick="setMode('wizard')">
-        <div class="surface-title">2. wizard TUI <span class="c-dim">●</span></div>
-        <div class="surface-desc">@clack/prompts interactive step transition & note card.</div>
+      <div class="surface-tab" id="tab-run" onclick="setMode('run')">
+        <div class="surface-title">2. run CLI <span class="c-dim">●</span></div>
+        <div class="surface-desc">Headless stdout with Relay Scorecard & target preview.</div>
       </div>
       <div class="surface-tab" id="tab-watch" onclick="setMode('watch')">
         <div class="surface-title">3. watch Monitor <span class="c-dim">●</span></div>
@@ -423,7 +421,7 @@
           <span class="win-btn win-min"></span>
           <span class="win-btn win-max"></span>
         </div>
-        <div class="window-title" id="terminalTitle">sandcastle run — 80x24 TTY</div>
+        <div class="window-title" id="terminalTitle">sandcastle wizard (Clack TUI)</div>
         <div style="width: 40px;"></div>
       </div>
       <div class="terminal-body" id="terminalOutput">
@@ -445,10 +443,10 @@
   <!-- Floating Switcher Bar -->
   <div class="prototype-switcher">
     <button class="nav-arrow" onclick="prevMode()" title="Previous Surface (← arrow)">◀</button>
-    <div class="variant-label" id="modeDisplayLabel">1. run CLI (Relay Scorecard)</div>
+    <div class="variant-label" id="modeDisplayLabel">1. wizard TUI (Clack Flow)</div>
     <div class="variant-pills">
-      <a class="v-pill" id="pill-run" href="javascript:setMode('run')">run</a>
       <a class="v-pill" id="pill-wizard" href="javascript:setMode('wizard')">wizard</a>
+      <a class="v-pill" id="pill-run" href="javascript:setMode('run')">run</a>
       <a class="v-pill" id="pill-watch" href="javascript:setMode('watch')">watch</a>
       <a class="v-pill" id="pill-ci" href="javascript:setMode('ci')">ci</a>
     </div>
@@ -458,8 +456,8 @@
 
   <script>
     const SURFACES = [
-      { key: 'run', title: 'sandcastle run — 80x24 TTY', name: '1. run CLI (Relay Scorecard)' },
-      { key: 'wizard', title: 'sandcastle wizard (Clack TUI)', name: '2. wizard TUI (Clack Flow)' },
+      { key: 'wizard', title: 'sandcastle wizard (Clack TUI)', name: '1. wizard TUI (Clack Flow)' },
+      { key: 'run', title: 'sandcastle run — 80x24 TTY', name: '2. run CLI (Relay Scorecard)' },
       { key: 'watch', title: 'sandcastle watch (Alternate Screen)', name: '3. watch Monitor (Alternate Screen)' },
       { key: 'ci', title: 'CI Pipeline Runner (stdout stream)', name: '4. CI Stream (Compact Single-line)' },
     ];
@@ -578,20 +576,20 @@
     ];
 
     let currentScenarioIndex = 0;
-    let currentMode = 'run';
+    let currentMode = 'wizard';
     let countdownSeconds = 3.0;
     let isPaused = false;
 
     function getModeFromUrl() {
       const params = new URLSearchParams(window.location.search);
       const m = params.get('mode') || params.get('variant');
-      if (m && ['RUN', 'WIZARD', 'WATCH', 'CI'].includes(m.toUpperCase())) {
+      if (m && ['WIZARD', 'RUN', 'WATCH', 'CI'].includes(m.toUpperCase())) {
         return m.toLowerCase();
       }
       if (m && m.toUpperCase() === 'A') return 'run';
       if (m && m.toUpperCase() === 'B') return 'ci';
       if (m && m.toUpperCase() === 'C') return 'watch';
-      return 'run';
+      return 'wizard';
     }
 
     function setMode(m) {
@@ -642,7 +640,31 @@
       return (ms / 1000).toFixed(1) + 's';
     }
 
-    /* 1. RUN MODE HTML */
+    /* 1. WIZARD MODE HTML */
+    function renderWizardHtml(state) {
+      const { completed, next, queueIndex, totalQueue, countdown, paused } = state;
+      const countDisplay = paused ? '<span class="c-yellow">[PAUSED]</span>' : `<span class="c-cyan">${countdown.toFixed(1)}s</span>`;
+
+      return `
+<div style="line-height: 1.8;">
+  <div><span class="c-green">✔</span> <strong class="c-bold">Issue #${completed.number} closed successfully</strong> in ${formatMs(completed.durationMs)} (PR #${completed.prNumber} merged, ${completed.testsPassed} tests passed)</div>
+  <br/>
+  <div class="c-cyan c-bold">◆ Sandcastle Baton Handoff Note</div>
+  <div class="c-cyan">│</div>
+  <div class="c-cyan">│  <strong style="color: #fff;">Completed:</strong>  #${completed.number} ${completed.title}</div>
+  <div class="c-cyan">│  <strong style="color: #fff;">Progress:</strong>   ${queueIndex}/${totalQueue} issues closed (${Math.round((queueIndex / totalQueue) * 100)}%)</div>
+  <div class="c-cyan">│  <strong style="color: #fff;">Next Up:</strong>    #${next.number} "${next.title}" <span class="c-green">[READY]</span></div>
+  ${next.parentIssue ? `<div class="c-cyan">│  <strong style="color: #fff;">Parent:</strong>     #${next.parentIssue.number} (Child ${next.parentIssue.childIndex}/${next.parentIssue.totalChildren})</div>` : ''}
+  <div class="c-cyan">│  <strong style="color: #fff;">Engine:</strong>     ${next.model} (${next.reasoningEffort} reasoning)</div>
+  <div class="c-cyan">│</div>
+  <div class="c-cyan">└ <span class="c-dim">Spooling next worker session in ${countDisplay}... [Press Space to pause or Enter to start]</span></div>
+  <br/>
+  <div class="c-cyan">◓ <span class="c-dim">[1/6 Inspecting] Fetching requirements for Issue #${next.number}...</span></div>
+</div>
+`;
+    }
+
+    /* 2. RUN MODE HTML */
     function renderRunHtml(state) {
       const { completed, next, queueIndex, totalQueue, countdown, paused } = state;
       const progressPct = Math.round((queueIndex / totalQueue) * 100);
@@ -686,30 +708,6 @@
 `;
     }
 
-    /* 2. WIZARD MODE HTML */
-    function renderWizardHtml(state) {
-      const { completed, next, queueIndex, totalQueue, countdown, paused } = state;
-      const countDisplay = paused ? '<span class="c-yellow">[PAUSED]</span>' : `<span class="c-cyan">${countdown.toFixed(1)}s</span>`;
-
-      return `
-<div style="line-height: 1.8;">
-  <div><span class="c-green">✔</span> <strong class="c-bold">Issue #${completed.number} closed successfully</strong> in ${formatMs(completed.durationMs)} (PR #${completed.prNumber} merged, ${completed.testsPassed} tests passed)</div>
-  <br/>
-  <div class="c-cyan c-bold">◆ Sandcastle Baton Handoff Note</div>
-  <div class="c-cyan">│</div>
-  <div class="c-cyan">│  <strong style="color: #fff;">Completed:</strong>  #${completed.number} ${completed.title}</div>
-  <div class="c-cyan">│  <strong style="color: #fff;">Progress:</strong>   ${queueIndex}/${totalQueue} issues closed (${Math.round((queueIndex / totalQueue) * 100)}%)</div>
-  <div class="c-cyan">│  <strong style="color: #fff;">Next Up:</strong>    #${next.number} "${next.title}" <span class="c-green">[READY]</span></div>
-  ${next.parentIssue ? `<div class="c-cyan">│  <strong style="color: #fff;">Parent:</strong>     #${next.parentIssue.number} (Child ${next.parentIssue.childIndex}/${next.parentIssue.totalChildren})</div>` : ''}
-  <div class="c-cyan">│  <strong style="color: #fff;">Engine:</strong>     ${next.model} (${next.reasoningEffort} reasoning)</div>
-  <div class="c-cyan">│</div>
-  <div class="c-cyan">└ <span class="c-dim">Spooling next worker session in ${countDisplay}... [Press Space to pause or Enter to start]</span></div>
-  <br/>
-  <div class="c-cyan">◓ <span class="c-dim">[1/6 Inspecting] Fetching requirements for Issue #${next.number}...</span></div>
-</div>
-`;
-    }
-
     /* 3. WATCH MODE HTML */
     function renderWatchHtml(state) {
       const { completed, next, queueIndex, totalQueue, countdown, paused } = state;
@@ -726,7 +724,7 @@
   <div class="c-dim">──────────────────────────────────────────────────────────────────────────</div>
   <div style="margin: 6px 0;">
     <span style="background: #3b82f6; color: #000; font-weight: bold; padding: 2px 6px; font-size: 11px;"> BATON HANDOFF </span>
-    <strong>Repo:</strong> <span class="c-magenta">Vudattumaniteja/sandcastle-baton-demo</span>
+    <strong>Repo:</strong> <span class="c-cyan">Vudattumaniteja/sandcastle-baton-demo</span>
     <strong>Session:</strong> <span class="c-dim">baton-live-37</span>
   </div>
   <div style="margin-bottom: 12px;">
@@ -777,7 +775,7 @@
   <div><span class="c-green">✔</span> <strong class="c-bold">BATON COMPLETED: #${completed.number}</strong> "${completed.title}" <span class="c-dim">[${formatMs(completed.durationMs)} • PR #${completed.prNumber} merged • ${completed.testsPassed} tests green]</span></div>
   <div style="margin: 8px 0;"><span class="c-dim">Pipeline:</span> ${qItems.join(' <span class="c-dim">──▶</span> ')} <span class="c-dim">(${queueIndex}/${totalQueue})</span></div>
   <div style="margin: 8px 0;"><span class="c-cyan">>>></span> <strong class="c-bold">Instant handoff to #${next.number}...</strong> <span class="c-dim">(CI mode: 0s pacing)</span></div>
-  <div style="margin-top: 12px;"><span class="c-magenta">↳ TARGET</span> <strong class="c-bold">#${next.number}</strong> "${next.title}" <span class="c-green">[${next.gatingStatus}]</span></div>
+  <div style="margin-top: 12px;"><span class="c-cyan">↳ TARGET</span> <strong class="c-bold">#${next.number}</strong> "${next.title}" <span class="c-green">[${next.gatingStatus}]</span></div>
 </div>
 `;
     }
@@ -806,10 +804,10 @@
 
       // Render Terminal Output
       const term = document.getElementById('terminalOutput');
-      if (currentMode === 'run') {
-        term.innerHTML = renderRunHtml(state);
-      } else if (currentMode === 'wizard') {
+      if (currentMode === 'wizard') {
         term.innerHTML = renderWizardHtml(state);
+      } else if (currentMode === 'run') {
+        term.innerHTML = renderRunHtml(state);
       } else if (currentMode === 'watch') {
         term.innerHTML = renderWatchHtml(state);
       } else {
@@ -829,9 +827,9 @@
       } else if (e.key === 'ArrowRight') {
         nextMode();
       } else if (e.key === '1') {
-        setMode('run');
-      } else if (e.key === '2') {
         setMode('wizard');
+      } else if (e.key === '2') {
+        setMode('run');
       } else if (e.key === '3') {
         setMode('watch');
       } else if (e.key === '4') {

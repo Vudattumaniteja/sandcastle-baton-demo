@@ -3,14 +3,14 @@
  * 
  * Question: What visual format, terminal layout, timing indicators, and next-issue
  * previews should Sandcastle display across its CLI operational surfaces
- * (run, wizard, watch, and CI stream) during baton handoff?
+ * (wizard, run, watch, and CI stream) during baton handoff?
  * 
  * This file is throwaway prototype code. Do not use in production without refactoring.
  */
 
 import pc from 'picocolors';
 
-export type CliMode = 'run' | 'wizard' | 'watch' | 'ci';
+export type CliMode = 'wizard' | 'run' | 'watch' | 'ci';
 
 export interface BatonHandoffPayload {
   mode: CliMode;
@@ -57,7 +57,7 @@ export interface BatonHandoffPayload {
 }
 
 export const SAMPLE_BATON_PAYLOAD: BatonHandoffPayload = {
-  mode: 'run',
+  mode: 'wizard',
   queueIndex: 2,
   totalQueue: 5,
   countdownSeconds: 3.0,
@@ -109,7 +109,35 @@ function formatMs(ms: number): string {
 }
 
 /**
- * 1. CLI RUN MODE (Standard stdout stream with Relay Scorecard & Next Preview)
+ * 1. CLACK WIZARD MODE (Interactive note card and spinner lifecycle)
+ */
+export function renderWizardMode(state: BatonHandoffPayload): string {
+  const { completed, next, queueIndex, totalQueue, countdownSeconds, isPaused } = state;
+  const lines: string[] = [];
+
+  const countdownText = isPaused ? pc.yellow('[PAUSED]') : pc.cyan(`${countdownSeconds.toFixed(1)}s`);
+
+  lines.push(pc.green('✔') + ' ' + pc.bold(`Issue #${completed.number} closed successfully`) + ` in ${formatMs(completed.durationMs)} (PR #${completed.prNumber} merged, ${completed.testsPassed} tests passed)`);
+  lines.push('');
+  lines.push(pc.cyan('◆') + ' ' + pc.bold('Sandcastle Baton Handoff Note'));
+  lines.push(pc.cyan('│'));
+  lines.push(pc.cyan('│') + `  ${pc.bold('Completed:')}  #${completed.number} ${completed.title.substring(0, 48)}...`);
+  lines.push(pc.cyan('│') + `  ${pc.bold('Progress:')}   ${queueIndex}/${totalQueue} issues closed (${Math.round((queueIndex / totalQueue) * 100)}%)`);
+  lines.push(pc.cyan('│') + `  ${pc.bold('Next Up:')}    #${next.number} "${next.title.substring(0, 45)}..." ${pc.green('[READY]')}`);
+  if (next.parentIssue) {
+    lines.push(pc.cyan('│') + `  ${pc.bold('Parent:')}     #${next.parentIssue.number} (Child ${next.parentIssue.childIndex}/${next.parentIssue.totalChildren})`);
+  }
+  lines.push(pc.cyan('│') + `  ${pc.bold('Engine:')}     ${next.model} (${next.reasoningEffort} reasoning)`);
+  lines.push(pc.cyan('│'));
+  lines.push(pc.cyan('└') + ' ' + pc.dim(`Spooling next worker session in ${countdownText}... [Press Space to pause or Enter to start]`));
+  lines.push('');
+  lines.push(pc.cyan('◓') + ' ' + pc.dim(`[1/6 Inspecting] Fetching requirements for Issue #${next.number}...`));
+
+  return lines.join('\n');
+}
+
+/**
+ * 2. CLI RUN MODE (Standard stdout stream with Relay Scorecard & Next Preview)
  */
 export function renderRunMode(state: BatonHandoffPayload): string {
   const { completed, next, queueIndex, totalQueue, countdownSeconds, isPaused } = state;
@@ -174,34 +202,6 @@ export function renderRunMode(state: BatonHandoffPayload): string {
 }
 
 /**
- * 2. CLACK WIZARD MODE (Interactive note card and spinner lifecycle)
- */
-export function renderWizardMode(state: BatonHandoffPayload): string {
-  const { completed, next, queueIndex, totalQueue, countdownSeconds, isPaused } = state;
-  const lines: string[] = [];
-
-  const countdownText = isPaused ? pc.yellow('[PAUSED]') : pc.cyan(`${countdownSeconds.toFixed(1)}s`);
-
-  lines.push(pc.green('✔') + ' ' + pc.bold(`Issue #${completed.number} closed successfully`) + ` in ${formatMs(completed.durationMs)} (PR #${completed.prNumber} merged, ${completed.testsPassed} tests passed)`);
-  lines.push('');
-  lines.push(pc.cyan('◆') + ' ' + pc.bold('Sandcastle Baton Handoff Note'));
-  lines.push(pc.cyan('│'));
-  lines.push(pc.cyan('│') + `  ${pc.bold('Completed:')}  #${completed.number} ${completed.title.substring(0, 48)}...`);
-  lines.push(pc.cyan('│') + `  ${pc.bold('Progress:')}   ${queueIndex}/${totalQueue} issues closed (${Math.round((queueIndex / totalQueue) * 100)}%)`);
-  lines.push(pc.cyan('│') + `  ${pc.bold('Next Up:')}    #${next.number} "${next.title.substring(0, 45)}..." ${pc.green('[READY]')}`);
-  if (next.parentIssue) {
-    lines.push(pc.cyan('│') + `  ${pc.bold('Parent:')}     #${next.parentIssue.number} (Child ${next.parentIssue.childIndex}/${next.parentIssue.totalChildren})`);
-  }
-  lines.push(pc.cyan('│') + `  ${pc.bold('Engine:')}     ${next.model} (${next.reasoningEffort} reasoning)`);
-  lines.push(pc.cyan('│'));
-  lines.push(pc.cyan('└') + ' ' + pc.dim(`Spooling next worker session in ${countdownText}... [Press Space to pause or Enter to start]`));
-  lines.push('');
-  lines.push(pc.cyan('◓') + ' ' + pc.dim(`[1/6 Inspecting] Fetching requirements for Issue #${next.number}...`));
-
-  return lines.join('\n');
-}
-
-/**
  * 3. LIVE WATCH MONITOR MODE (Alternate-screen HUD with in-flight handoff box)
  */
 export function renderWatchMode(state: BatonHandoffPayload): string {
@@ -218,7 +218,7 @@ export function renderWatchMode(state: BatonHandoffPayload): string {
 
   // Statusline
   const statusBadge = pc.bgBlue(pc.black(' BATON HANDOFF '));
-  lines.push(`  ${statusBadge}  ${pc.bold('Repo:')} ${pc.magenta('Vudattumaniteja/sandcastle-baton-demo')}  ${pc.bold('Session:')} ${pc.gray('baton-live-37')}`);
+  lines.push(`  ${statusBadge}  ${pc.bold('Repo:')} ${pc.cyan('Vudattumaniteja/sandcastle-baton-demo')}  ${pc.bold('Session:')} ${pc.gray('baton-live-37')}`);
   lines.push(`  ${pc.bold('Active:')} ${pc.yellow(`Handoff #${completed.number} ➔ #${next.number}`)}  │  ${pc.bold('Progress:')} ${queueIndex}/${totalQueue} closed  ${pc.cyan('████████')}${pc.gray('░░░░░░░░░░░░')} ${progressPct}%`);
   lines.push('');
 
@@ -241,8 +241,6 @@ export function renderWatchMode(state: BatonHandoffPayload): string {
 
   lines.push('');
   lines.push(`  ${pc.bold('Model:')} ${pc.green(next.model)}  │  ${pc.bold('Quota:')} ${pc.cyan('████████')}${pc.gray('░░')} 88%  │  ${pc.bold('Tokens:')} 18.4k`);
-  lines.push(pc.gray('─'.repeat(74)));
-  lines.push(`  ${pc.bold('[Space]')} Pause   ${pc.bold('[Enter]')} Spool Now   ${pc.bold('[s]')} Skip   ${pc.bold('[q]')} Detach`);
 
   return lines.join('\n');
 }
@@ -270,7 +268,7 @@ export function renderCiMode(state: BatonHandoffPayload): string {
   }
   lines.push(pc.gray('  Pipeline: ') + qList.join(pc.gray(' ──▶ ')) + pc.dim(` (${queueIndex}/${totalQueue})`));
   lines.push(pc.cyan('  >>> ') + pc.bold(`Instant handoff to #${next.number}...`) + ' ' + pc.dim(`(CI mode: 0s pacing)`));
-  lines.push(pc.magenta('  ↳ TARGET ') + pc.bold(`#${next.number}`) + ` "${next.title.substring(0, 48)}..." ` + pc.green(`[${next.gatingStatus}]`));
+  lines.push(pc.cyan('  ↳ TARGET ') + pc.bold(`#${next.number}`) + ` "${next.title.substring(0, 48)}..." ` + pc.green(`[${next.gatingStatus}]`));
 
   return lines.join('\n');
 }
@@ -280,15 +278,15 @@ export function renderCiMode(state: BatonHandoffPayload): string {
  */
 export function renderHandoffBySurface(state: BatonHandoffPayload): string {
   switch (state.mode) {
-    case 'run':
-      return renderRunMode(state);
     case 'wizard':
       return renderWizardMode(state);
+    case 'run':
+      return renderRunMode(state);
     case 'watch':
       return renderWatchMode(state);
     case 'ci':
       return renderCiMode(state);
     default:
-      return renderRunMode(state);
+      return renderWizardMode(state);
   }
 }

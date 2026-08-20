@@ -3,8 +3,8 @@
  * PROTOTYPE RUNNER: Visual Baton Handoff across CLI Surfaces (Issue #37)
  * 
  * Simulates how the handoff banner displays across all 4 Sandcastle CLI execution surfaces:
- * 1. 'run'    - Standard Headless / stdout stream with Relay Scorecard
- * 2. 'wizard' - Clack interactive guided wizard TUI flow
+ * 1. 'wizard' - Clack interactive guided wizard TUI flow (Default)
+ * 2. 'run'    - Standard Headless / stdout stream with Relay Scorecard
  * 3. 'watch'  - Alternate-screen Live Monitor HUD
  * 4. 'ci'     - Compact single-line pipeline stream
  * 
@@ -150,13 +150,13 @@ const SCENARIOS = [
 ];
 
 const MODES = [
-  { id: 'run', name: '1. run CLI (Relay Scorecard)' },
-  { id: 'wizard', name: '2. wizard TUI (Clack Flow)' },
+  { id: 'wizard', name: '1. wizard TUI (Clack Flow)' },
+  { id: 'run', name: '2. run CLI (Relay Scorecard)' },
   { id: 'watch', name: '3. watch Monitor (Alternate Screen)' },
   { id: 'ci', name: '4. ci Stream (Compact Single-line)' },
 ];
 
-let currentMode = 'run';
+let currentMode = 'wizard';
 const cliArg = process.argv.find(arg => arg.startsWith('--mode=') || arg.startsWith('-m='));
 if (cliArg) {
   const m = cliArg.split('=')[1].toLowerCase();
@@ -263,7 +263,7 @@ function renderWatch(state) {
   lines.push(pc.gray('─'.repeat(74)));
 
   const statusBadge = pc.bgBlue(pc.black(' BATON HANDOFF '));
-  lines.push(`  ${statusBadge}  ${pc.bold('Repo:')} ${pc.magenta('Vudattumaniteja/sandcastle-baton-demo')}  ${pc.bold('Session:')} ${pc.gray('baton-live-37')}`);
+  lines.push(`  ${statusBadge}  ${pc.bold('Repo:')} ${pc.cyan('Vudattumaniteja/sandcastle-baton-demo')}  ${pc.bold('Session:')} ${pc.gray('baton-live-37')}`);
   lines.push(`  ${pc.bold('Active:')} ${pc.yellow(`Handoff #${completed.number} ➔ #${next.number}`)}  │  ${pc.bold('Progress:')} ${queueIndex}/${totalQueue} closed  ${pc.cyan('████████')}${pc.gray('░░░░░░░░░░░░')} ${progressPct}%`);
   lines.push('');
 
@@ -309,7 +309,7 @@ function renderCi(state) {
   }
   lines.push(pc.gray('  Pipeline: ') + qList.join(pc.gray(' ──▶ ')) + pc.dim(` (${queueIndex}/${totalQueue})`));
   lines.push(pc.cyan('  >>> ') + pc.bold(`Instant handoff to #${next.number}...`) + ' ' + pc.dim(`(CI mode: 0s pacing)`));
-  lines.push(pc.magenta('  ↳ TARGET ') + pc.bold(`#${next.number}`) + ` "${next.title.substring(0, 48)}..." ` + pc.green(`[${next.gatingStatus}]`));
+  lines.push(pc.cyan('  ↳ TARGET ') + pc.bold(`#${next.number}`) + ` "${next.title.substring(0, 48)}..." ` + pc.green(`[${next.gatingStatus}]`));
 
   return lines.join('\n');
 }
@@ -324,7 +324,7 @@ function renderScreen() {
   };
 
   console.clear();
-  console.log(pc.bold(pc.bgMagenta(pc.black(' SANDCASTLE '))) + pc.bold(pc.cyan(' — BATON HANDOFF ARCHITECTURE PROTOTYPE (Issue #37)')));
+  console.log(pc.bold(pc.cyan('Sandcastle Baton Handoff Prototype')) + pc.gray(' — Issue #37'));
   console.log(pc.gray('━'.repeat(78)));
   
   const modePills = MODES.map(m => {
@@ -332,8 +332,8 @@ function renderScreen() {
     return isCur ? pc.bgCyan(pc.black(` [${m.id}] ${m.name.split('(')[0].trim()} `)) : pc.dim(` [${m.id}] `);
   }).join(' ');
 
-  console.log(`CLI Surface Mode: ${modePills}`);
-  console.log(pc.yellow(`Active Scenario [${currentScenarioIndex + 1}/${SCENARIOS.length}]: `) + pc.bold(scenario.name));
+  console.log(`Active Surface: ${modePills}`);
+  console.log(pc.yellow(`Scenario [${currentScenarioIndex + 1}/${SCENARIOS.length}]: `) + pc.bold(scenario.name));
   console.log(pc.gray('─'.repeat(78)));
   console.log('');
 
@@ -350,7 +350,7 @@ function renderScreen() {
   console.log('');
   console.log(pc.gray('─'.repeat(78)));
   console.log(`  ${pc.bold('Keyboard Shortcuts:')}
-    [1 / 2 / 3 / 4] or [← / →] : Switch Surface (1: run, 2: wizard, 3: watch, 4: ci)
+    [1 / 2 / 3 / 4] or [← / →] : Switch Surface (1: wizard, 2: run, 3: watch, 4: ci)
     [Space / p]                : Pause / Resume Countdown (${isPaused ? pc.yellow('PAUSED') : pc.green('RUNNING')})
     [Enter]                    : Spool Next Worker Immediately (Fast-Forward)
     [n]                        : Switch Test Scenario (${currentScenarioIndex + 1}/${SCENARIOS.length})
@@ -382,10 +382,10 @@ if (process.stdin.isTTY) {
     }
 
     if (key.name === '1' || str === '1') {
-      currentMode = 'run';
+      currentMode = 'wizard';
       renderScreen();
     } else if (key.name === '2' || str === '2') {
-      currentMode = 'wizard';
+      currentMode = 'run';
       renderScreen();
     } else if (key.name === '3' || str === '3') {
       currentMode = 'watch';
@@ -394,12 +394,12 @@ if (process.stdin.isTTY) {
       currentMode = 'ci';
       renderScreen();
     } else if (key.name === 'left') {
-      const modeKeys = ['run', 'wizard', 'watch', 'ci'];
+      const modeKeys = ['wizard', 'run', 'watch', 'ci'];
       const idx = modeKeys.indexOf(currentMode);
       currentMode = modeKeys[(idx - 1 + modeKeys.length) % modeKeys.length];
       renderScreen();
     } else if (key.name === 'right') {
-      const modeKeys = ['run', 'wizard', 'watch', 'ci'];
+      const modeKeys = ['wizard', 'run', 'watch', 'ci'];
       const idx = modeKeys.indexOf(currentMode);
       currentMode = modeKeys[(idx + 1) % modeKeys.length];
       renderScreen();
@@ -407,7 +407,6 @@ if (process.stdin.isTTY) {
       isPaused = !isPaused;
       renderScreen();
     } else if (key.name === 'return') {
-      // Fast forward to next issue
       countdownSeconds = 3.0;
       currentScenarioIndex = (currentScenarioIndex + 1) % SCENARIOS.length;
       renderScreen();
