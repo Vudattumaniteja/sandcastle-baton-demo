@@ -32,6 +32,22 @@ describe('ConfigService (3-Tier Configuration Resolution)', () => {
     expect(resolved.autoMerge).toBe(true);
     expect(resolved.parentLabels).toEqual(['parent', 'epic', 'wayfinder:map']);
     expect(resolved.hitlLabels).toEqual(['wayfinder:grilling', 'wayfinder:prototype']);
+    expect(resolved.promptTemplate).toBe('');
+  });
+
+  it('should support configuring custom promptTemplate in local and global config', () => {
+    fs.mkdirSync(path.dirname(localConfigPath), { recursive: true });
+    fs.writeFileSync(
+      localConfigPath,
+      JSON.stringify({
+        promptTemplate: '.sandcastle/custom-prompt.md',
+      })
+    );
+
+    const configService = new ConfigService({ localConfigPath, globalConfigPath });
+    const resolved = configService.resolve();
+
+    expect(resolved.promptTemplate).toBe('.sandcastle/custom-prompt.md');
   });
 
   it('should support overriding parentLabels and hitlLabels in config', () => {

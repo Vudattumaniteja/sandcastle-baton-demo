@@ -107,6 +107,7 @@ export interface BatonRunnerOptions extends Partial<SandcastleConfig> {
   antigravityService?: any;
   gatingEvaluator?: any;
   processSupervisor?: any;
+  promptTemplateEngine?: any;
   configService?: any;
   cwd?: string;
   stateFilePath?: string;
