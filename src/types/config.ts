@@ -10,6 +10,7 @@ export interface SandcastleConfig {
   parentLabels?: string[];
   hitlLabels?: string[];
   promptTemplate?: string;
+  parentContext?: 'reference' | 'inline' | 'none';
 }
 
 export type ConfigKey = keyof SandcastleConfig;

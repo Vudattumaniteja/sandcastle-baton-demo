@@ -19,6 +19,7 @@ export const DEFAULT_CONFIG: Required<SandcastleConfig> = {
   parentLabels: ['parent', 'epic', 'wayfinder:map'],
   hitlLabels: ['wayfinder:grilling', 'wayfinder:prototype'],
   promptTemplate: '',
+  parentContext: 'reference',
 };
 
 export class ConfigService {

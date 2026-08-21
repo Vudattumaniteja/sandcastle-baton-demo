@@ -51,6 +51,16 @@ export interface ListIssuesOptions {
   repo?: string;
 }
 
+export interface ParentProgressCommentOptions {
+  parentNumber: number;
+  childNumber: number;
+  childTitle?: string;
+  changes?: string;
+  verification?: string;
+  testingNotes?: string;
+  repo?: string;
+}
+
 export interface CommandResult {
   stdout: string;
   stderr: string;

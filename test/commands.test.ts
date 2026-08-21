@@ -417,6 +417,324 @@ describe('POSIX Headless Commands (doctor, status, config, run)', () => {
       );
       expect(processExitSpy).toHaveBeenCalledWith(1);
     });
+
+    describe('Direct Parent Issue Execution', () => {
+      const parentIssue = {
+        number: 40,
+        title: 'Epic: Architecture',
+        body: 'Epic specification',
+        state: 'OPEN',
+        labels: [{ name: 'epic' }],
+      };
+
+      const childIssues = [
+        {
+          number: 41,
+          title: 'Child Task 1',
+          body: 'Part of #40',
+          state: 'OPEN',
+          labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+        },
+        {
+          number: 42,
+          title: 'Child Task 2',
+          body: 'Part of #40',
+          state: 'OPEN',
+          labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+        },
+      ];
+
+      it('should fail with exit code 1 in headless mode when parent issue is run without --expand-children or -y', async () => {
+        const mockGitHubService = {
+          getRepo: vi.fn().mockResolvedValue('owner/repo'),
+          getIssue: vi.fn().mockResolvedValue(parentIssue),
+          listIssues: vi.fn().mockResolvedValue(childIssues),
+        };
+
+        const mockGatingEvaluator = {
+          evaluateIssue: vi.fn().mockResolvedValue({
+            issueNumber: 40,
+            title: 'Epic: Architecture',
+            status: 'PARENT',
+            isReady: false,
+            reasons: ['Issue is classified as a parent/epic specification.'],
+          }),
+          parseParentReferences: vi.fn((body: string) => (body.includes('#40') ? [40] : [])),
+        };
+
+        const runnerFactory = vi.fn();
+
+        await runCommand(
+          '40',
+          {},
+          runnerFactory,
+          {
+            isTTY: false,
+            githubService: mockGitHubService as any,
+            gatingEvaluator: mockGatingEvaluator as any,
+          }
+        );
+
+        expect(processExitSpy).toHaveBeenCalledWith(1);
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Issue #40 is a parent/epic specification and cannot be run directly')
+        );
+        expect(runnerFactory).not.toHaveBeenCalled();
+      });
+
+      it('should expand child queue and execute in headless mode when --expand-children is passed', async () => {
+        const mockGitHubService = {
+          getRepo: vi.fn().mockResolvedValue('owner/repo'),
+          getIssue: vi.fn().mockResolvedValue(parentIssue),
+          listIssues: vi.fn().mockResolvedValue(childIssues),
+        };
+
+        const mockGatingEvaluator = {
+          evaluateIssue: vi.fn().mockResolvedValue({
+            issueNumber: 40,
+            title: 'Epic: Architecture',
+            status: 'PARENT',
+            isReady: false,
+            reasons: ['Issue is classified as a parent/epic specification.'],
+          }),
+          parseParentReferences: vi.fn((body: string) => (body.includes('#40') ? [40] : [])),
+        };
+
+        const mockRunner = {
+          run: vi.fn().mockResolvedValue({
+            success: true,
+            totalProcessed: 2,
+            closedIssues: [41, 42],
+            blockedIssues: [],
+            durationMs: 1500,
+          }),
+          on: vi.fn(),
+        };
+
+        const runnerFactory = vi.fn().mockReturnValue(mockRunner);
+
+        await runCommand(
+          '40',
+          { expandChildren: true, json: true },
+          runnerFactory,
+          {
+            isTTY: false,
+            githubService: mockGitHubService as any,
+            gatingEvaluator: mockGatingEvaluator as any,
+          }
+        );
+
+        expect(runnerFactory).toHaveBeenCalledWith(
+          expect.objectContaining({
+            scope: { type: 'only', targets: [41, 42] },
+            only: [41, 42],
+            issues: [41, 42],
+          })
+        );
+        expect(mockRunner.run).toHaveBeenCalled();
+      });
+
+      it('should expand child queue and execute in headless mode when -y / --yes is passed', async () => {
+        const mockGitHubService = {
+          getRepo: vi.fn().mockResolvedValue('owner/repo'),
+          getIssue: vi.fn().mockResolvedValue(parentIssue),
+          listIssues: vi.fn().mockResolvedValue(childIssues),
+        };
+
+        const mockGatingEvaluator = {
+          evaluateIssue: vi.fn().mockResolvedValue({
+            issueNumber: 40,
+            title: 'Epic: Architecture',
+            status: 'PARENT',
+            isReady: false,
+            reasons: ['Issue is classified as a parent/epic specification.'],
+          }),
+          parseParentReferences: vi.fn((body: string) => (body.includes('#40') ? [40] : [])),
+        };
+
+        const mockRunner = {
+          run: vi.fn().mockResolvedValue({
+            success: true,
+            totalProcessed: 2,
+            closedIssues: [41, 42],
+            blockedIssues: [],
+            durationMs: 1500,
+          }),
+          on: vi.fn(),
+        };
+
+        const runnerFactory = vi.fn().mockReturnValue(mockRunner);
+
+        await runCommand(
+          '40',
+          { yes: true, json: true },
+          runnerFactory,
+          {
+            isTTY: false,
+            githubService: mockGitHubService as any,
+            gatingEvaluator: mockGatingEvaluator as any,
+          }
+        );
+
+        expect(runnerFactory).toHaveBeenCalledWith(
+          expect.objectContaining({
+            scope: { type: 'only', targets: [41, 42] },
+          })
+        );
+      });
+
+      it('should prompt for confirmation in interactive mode and run child queue on confirmation', async () => {
+        const mockGitHubService = {
+          getRepo: vi.fn().mockResolvedValue('owner/repo'),
+          getIssue: vi.fn().mockResolvedValue(parentIssue),
+          listIssues: vi.fn().mockResolvedValue(childIssues),
+        };
+
+        const mockGatingEvaluator = {
+          evaluateIssue: vi.fn().mockResolvedValue({
+            issueNumber: 40,
+            title: 'Epic: Architecture',
+            status: 'PARENT',
+            isReady: false,
+            reasons: ['Issue is classified as a parent/epic specification.'],
+          }),
+          parseParentReferences: vi.fn((body: string) => (body.includes('#40') ? [40] : [])),
+        };
+
+        const mockPrompts = {
+          confirm: vi.fn().mockResolvedValue(true),
+          isCancel: vi.fn().mockReturnValue(false),
+          cancel: vi.fn(),
+        };
+
+        const mockRunner = {
+          run: vi.fn().mockResolvedValue({
+            success: true,
+            totalProcessed: 2,
+            closedIssues: [41, 42],
+            blockedIssues: [],
+            durationMs: 1500,
+          }),
+          on: vi.fn(),
+        };
+
+        const runnerFactory = vi.fn().mockReturnValue(mockRunner);
+
+        await runCommand(
+          '40',
+          {},
+          runnerFactory,
+          {
+            isTTY: true,
+            prompts: mockPrompts as any,
+            githubService: mockGitHubService as any,
+            gatingEvaluator: mockGatingEvaluator as any,
+          }
+        );
+
+        expect(mockPrompts.confirm).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: expect.stringContaining('Expand parent issue #40 and run 2 child task(s)?'),
+          })
+        );
+        expect(runnerFactory).toHaveBeenCalledWith(
+          expect.objectContaining({
+            scope: { type: 'only', targets: [41, 42] },
+          })
+        );
+      });
+
+      it('should cancel and not run when user declines confirmation in interactive mode', async () => {
+        const mockGitHubService = {
+          getRepo: vi.fn().mockResolvedValue('owner/repo'),
+          getIssue: vi.fn().mockResolvedValue(parentIssue),
+          listIssues: vi.fn().mockResolvedValue(childIssues),
+        };
+
+        const mockGatingEvaluator = {
+          evaluateIssue: vi.fn().mockResolvedValue({
+            issueNumber: 40,
+            title: 'Epic: Architecture',
+            status: 'PARENT',
+            isReady: false,
+            reasons: ['Issue is classified as a parent/epic specification.'],
+          }),
+          parseParentReferences: vi.fn((body: string) => (body.includes('#40') ? [40] : [])),
+        };
+
+        const mockPrompts = {
+          confirm: vi.fn().mockResolvedValue(false),
+          isCancel: vi.fn().mockReturnValue(false),
+          cancel: vi.fn(),
+        };
+
+        const runnerFactory = vi.fn();
+
+        await runCommand(
+          '40',
+          {},
+          runnerFactory,
+          {
+            isTTY: true,
+            prompts: mockPrompts as any,
+            githubService: mockGitHubService as any,
+            gatingEvaluator: mockGatingEvaluator as any,
+          }
+        );
+
+        expect(mockPrompts.confirm).toHaveBeenCalled();
+        expect(mockPrompts.cancel).toHaveBeenCalledWith('Parent execution cancelled.');
+        expect(runnerFactory).not.toHaveBeenCalled();
+      });
+
+      it('should pass parentContext mode to runner options', async () => {
+        const mockRunner = {
+          run: vi.fn().mockResolvedValue({
+            success: true,
+            totalProcessed: 1,
+            closedIssues: [44],
+            blockedIssues: [],
+            durationMs: 1000,
+          }),
+          on: vi.fn(),
+        };
+
+        const runnerFactory = vi.fn().mockReturnValue(mockRunner);
+
+        await runCommand(
+          '44',
+          { parentContext: 'inline', json: true },
+          runnerFactory,
+          {
+            githubService: {
+              getRepo: vi.fn().mockResolvedValue('owner/repo'),
+              getIssue: vi.fn().mockResolvedValue({
+                number: 44,
+                title: 'Child issue',
+                body: '',
+                state: 'OPEN',
+                labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+              }),
+            } as any,
+            gatingEvaluator: {
+              evaluateIssue: vi.fn().mockResolvedValue({
+                issueNumber: 44,
+                status: 'READY',
+                isReady: true,
+                reasons: [],
+              }),
+              parseParentReferences: vi.fn().mockReturnValue([]),
+            } as any,
+          }
+        );
+
+        expect(runnerFactory).toHaveBeenCalledWith(
+          expect.objectContaining({
+            parentContext: 'inline',
+          })
+        );
+      });
+    });
   });
 
   describe('watch command', () => {

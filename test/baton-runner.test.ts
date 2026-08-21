@@ -656,5 +656,258 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       const snapshot: BatonRunSnapshot = JSON.parse(fs.readFileSync(stateFilePath, 'utf-8'));
       expect(snapshot.scope).toEqual({ type: 'only', targets: [45, 42] });
     });
+
+    it('should inject parent reference metadata into prompt context under parentContext: "reference" mode', async () => {
+      const parentIssue: GitHubIssue = {
+        number: 40,
+        title: 'Epic: Architecture',
+        body: 'Epic specification body',
+        state: 'OPEN',
+        labels: [{ name: 'epic' }],
+        url: 'https://github.com/owner/repo/issues/40',
+      };
+
+      const childIssue: GitHubIssue = {
+        number: 44,
+        title: 'Child Implementation',
+        body: 'Part of #40\nRequirements here.',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+        url: 'https://github.com/owner/repo/issues/44',
+      };
+
+      const templatePath = path.join(tempDir, 'parent-ref-prompt.md');
+      fs.writeFileSync(
+        templatePath,
+        'Issue: #{{issue.number}}\nParent: #{{parent.number}} - {{parent.title}}\nParentBody: {{parent.body}}'
+      );
+
+      const mockGitHubService = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn((num: number) => {
+          if (num === 40) return Promise.resolve(parentIssue);
+          if (num === 44) return Promise.resolve(childIssue);
+          return Promise.resolve(null);
+        }),
+        syncParentChecklist: vi.fn().mockResolvedValue(true),
+        postParentProgressComment: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const mockGatingEvaluator = {
+        parseParentReferences: vi.fn().mockReturnValue([40]),
+        evaluateIssue: vi.fn().mockResolvedValue({
+          issueNumber: 44,
+          title: 'Child Implementation',
+          state: 'OPEN',
+          status: 'READY',
+          isReady: true,
+          reasons: ['Ready'],
+        }),
+      };
+
+      let generatedPrompt = '';
+      const mockProcessSupervisor = {
+        execute: vi.fn().mockImplementation((workerOptions) => {
+          generatedPrompt = workerOptions.prompt;
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 500,
+          });
+        }),
+      };
+
+      const runner = new BatonRunner({
+        repo: 'owner/repo',
+        issues: [44],
+        promptTemplate: templatePath,
+        parentContext: 'reference',
+        githubService: mockGitHubService as any,
+        gatingEvaluator: mockGatingEvaluator as any,
+        processSupervisor: mockProcessSupervisor as any,
+        stateFilePath,
+        mode: 'afk',
+      });
+
+      const result = await runner.run();
+
+      expect(result.success).toBe(true);
+      expect(generatedPrompt).toContain('Issue: #44');
+      expect(generatedPrompt).toContain('Parent: #40 - Epic: Architecture');
+      // In reference mode, parent.body is not inlined
+      expect(generatedPrompt).toContain('ParentBody: ');
+      expect(generatedPrompt).not.toContain('Epic specification body');
+      expect(mockGitHubService.syncParentChecklist).toHaveBeenCalledWith(40, 44, 'owner/repo');
+      expect(mockGitHubService.postParentProgressComment).toHaveBeenCalledWith(
+        expect.objectContaining({
+          parentNumber: 40,
+          childNumber: 44,
+          childTitle: 'Child Implementation',
+          repo: 'owner/repo',
+        })
+      );
+    });
+
+    it('should inline parent issue body into prompt context under parentContext: "inline" mode', async () => {
+      const parentIssue: GitHubIssue = {
+        number: 40,
+        title: 'Epic: Architecture',
+        body: 'Full architecture specification and requirements.',
+        state: 'OPEN',
+        labels: [{ name: 'epic' }],
+        url: 'https://github.com/owner/repo/issues/40',
+      };
+
+      const childIssue: GitHubIssue = {
+        number: 44,
+        title: 'Child Implementation',
+        body: 'Part of #40',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+        url: 'https://github.com/owner/repo/issues/44',
+      };
+
+      const templatePath = path.join(tempDir, 'parent-inline-prompt.md');
+      fs.writeFileSync(
+        templatePath,
+        'Issue: #{{issue.number}}\nParent: #{{parent.number}} - {{parent.title}}\nParent Body Content:\n{{parent.body}}'
+      );
+
+      const mockGitHubService = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn((num: number) => {
+          if (num === 40) return Promise.resolve(parentIssue);
+          if (num === 44) return Promise.resolve(childIssue);
+          return Promise.resolve(null);
+        }),
+        syncParentChecklist: vi.fn().mockResolvedValue(true),
+        postParentProgressComment: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const mockGatingEvaluator = {
+        parseParentReferences: vi.fn().mockReturnValue([40]),
+        evaluateIssue: vi.fn().mockResolvedValue({
+          issueNumber: 44,
+          title: 'Child Implementation',
+          state: 'OPEN',
+          status: 'READY',
+          isReady: true,
+          reasons: ['Ready'],
+        }),
+      };
+
+      let generatedPrompt = '';
+      const mockProcessSupervisor = {
+        execute: vi.fn().mockImplementation((workerOptions) => {
+          generatedPrompt = workerOptions.prompt;
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 500,
+          });
+        }),
+      };
+
+      const runner = new BatonRunner({
+        repo: 'owner/repo',
+        issues: [44],
+        promptTemplate: templatePath,
+        parentContext: 'inline',
+        githubService: mockGitHubService as any,
+        gatingEvaluator: mockGatingEvaluator as any,
+        processSupervisor: mockProcessSupervisor as any,
+        stateFilePath,
+        mode: 'afk',
+      });
+
+      const result = await runner.run();
+
+      expect(result.success).toBe(true);
+      expect(generatedPrompt).toContain('Issue: #44');
+      expect(generatedPrompt).toContain('Parent: #40 - Epic: Architecture');
+      expect(generatedPrompt).toContain('Full architecture specification and requirements.');
+    });
+
+    it('should omit parent issue metadata from prompt context under parentContext: "none" mode', async () => {
+      const parentIssue: GitHubIssue = {
+        number: 40,
+        title: 'Epic: Architecture',
+        body: 'Full architecture specification.',
+        state: 'OPEN',
+        labels: [{ name: 'epic' }],
+      };
+
+      const childIssue: GitHubIssue = {
+        number: 44,
+        title: 'Child Implementation',
+        body: 'Part of #40',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+      };
+
+      const templatePath = path.join(tempDir, 'parent-none-prompt.md');
+      fs.writeFileSync(
+        templatePath,
+        'Issue: #{{issue.number}}\nParentNum: {{parent.number}}\nParentTitle: {{parent.title}}'
+      );
+
+      const mockGitHubService = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn((num: number) => {
+          if (num === 40) return Promise.resolve(parentIssue);
+          if (num === 44) return Promise.resolve(childIssue);
+          return Promise.resolve(null);
+        }),
+        syncParentChecklist: vi.fn().mockResolvedValue(true),
+        postParentProgressComment: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const mockGatingEvaluator = {
+        parseParentReferences: vi.fn().mockReturnValue([40]),
+        evaluateIssue: vi.fn().mockResolvedValue({
+          issueNumber: 44,
+          title: 'Child Implementation',
+          state: 'OPEN',
+          status: 'READY',
+          isReady: true,
+          reasons: ['Ready'],
+        }),
+      };
+
+      let generatedPrompt = '';
+      const mockProcessSupervisor = {
+        execute: vi.fn().mockImplementation((workerOptions) => {
+          generatedPrompt = workerOptions.prompt;
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 500,
+          });
+        }),
+      };
+
+      const runner = new BatonRunner({
+        repo: 'owner/repo',
+        issues: [44],
+        promptTemplate: templatePath,
+        parentContext: 'none',
+        githubService: mockGitHubService as any,
+        gatingEvaluator: mockGatingEvaluator as any,
+        processSupervisor: mockProcessSupervisor as any,
+        stateFilePath,
+        mode: 'afk',
+      });
+
+      const result = await runner.run();
+
+      expect(result.success).toBe(true);
+      expect(generatedPrompt).toContain('Issue: #44');
+      expect(generatedPrompt).toContain('ParentNum: \n');
+      expect(generatedPrompt).toContain('ParentTitle: ');
+    });
   });
 });
+
