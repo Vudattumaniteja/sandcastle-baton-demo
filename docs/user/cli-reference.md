@@ -85,6 +85,10 @@ sandcastle run [issue] [options]
 | `--no-auto-pr` | Boolean | — | Disable automatic Pull Request creation. |
 | `--auto-merge` | Boolean | `true` | Automatically merge the Pull Request upon creation. |
 | `--no-auto-merge` | Boolean | — | Disable automatic Pull Request merging. |
+| `--prompt-template <path>` | String | Auto-resolved | Path to custom markdown prompt template file. |
+| `--parent-context <mode>` | Enum: `reference` \| `inline` \| `none` | `reference` | Parent issue context injection mode in prompt context. |
+| `--expand-children` | Boolean | `false` | Expand direct parent issue execution into its child tasks. |
+| `-y, --yes` | Boolean | `false` | Automatically confirm interactive prompts (e.g. expand children). |
 | `--json` | Boolean | `false` | Output structured JSON finish payload to stdout. Automatically activates quiet mode. |
 | `--quiet` | Boolean | `false` | Suppress non-essential progress output and banners. |
 

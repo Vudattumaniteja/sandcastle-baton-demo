@@ -1,5 +1,8 @@
 import pc from 'picocolors';
+import * as clack from '@clack/prompts';
 import { BatonRunner } from '../core/baton-runner.js';
+import { GitHubService } from '../services/github-service.js';
+import { GatingEvaluator } from '../core/gating-evaluator.js';
 import { wizardCommand } from './wizard.js';
 import type {
   BatonRunnerOptions,
@@ -22,6 +25,9 @@ export interface RunCommandOptions {
   quiet?: boolean;
   repo?: string;
   promptTemplate?: string;
+  parentContext?: 'reference' | 'inline' | 'none';
+  expandChildren?: boolean;
+  yes?: boolean;
   cwd?: string;
 }
 
@@ -33,6 +39,9 @@ export type RunnerFactory = (options: BatonRunnerOptions) => {
 export interface RunCommandDeps {
   wizardCommand?: () => Promise<any>;
   isTTY?: boolean;
+  githubService?: GitHubService;
+  gatingEvaluator?: GatingEvaluator;
+  prompts?: any;
 }
 
 export function parseIssueNumber(val: unknown): number | undefined {
@@ -147,6 +156,9 @@ export async function runCommand(
     return;
   }
 
+  const githubService = deps.githubService ?? new GitHubService({ repo: options.repo });
+  const gatingEvaluator = deps.gatingEvaluator ?? new GatingEvaluator({ githubService });
+
   // Build ExecutionScope
   let scope: ExecutionScope;
 
@@ -190,7 +202,75 @@ export async function runCommand(
       process.exit(1);
       return;
     }
-    scope = { type: 'from', target };
+
+    // Check if target is a parent issue
+    let isParent = false;
+    let childTargets: number[] = [];
+    try {
+      const targetRepo = await githubService.getRepo(options.repo);
+      const targetIssue = await githubService.getIssue(target, targetRepo);
+      if (targetIssue) {
+        const evalResult = await gatingEvaluator.evaluateIssue(targetIssue, targetRepo);
+        if (evalResult.status === 'PARENT') {
+          isParent = true;
+          const openIssues = await githubService.listIssues({ state: 'open', repo: targetRepo });
+          const childIssues = openIssues
+            .filter((i) => gatingEvaluator.parseParentReferences(i.body || '').includes(target))
+            .sort((a, b) => a.number - b.number);
+          childTargets = childIssues.map((i) => i.number);
+        }
+      }
+    } catch {
+      // Ignore error
+    }
+
+    if (isParent) {
+      const shouldExpand = Boolean(options.expandChildren || options.yes);
+      if (shouldExpand) {
+        scope = { type: 'only', targets: childTargets };
+      } else if (isTTY) {
+        const prompts = deps.prompts ?? clack;
+        if (!options.quiet && !options.json) {
+          console.log(
+            pc.cyan(
+              `\nParent issue #${target} detected with ${childTargets.length} child task(s):`
+            )
+          );
+          if (childTargets.length > 0) {
+            console.log(
+              `   ${childTargets.map((n) => pc.bold(`#${n}`)).join(', ')}\n`
+            );
+          }
+        }
+
+        const confirmed = await prompts.confirm({
+          message: `Expand parent issue #${target} and run ${childTargets.length} child task(s)?`,
+          initialValue: true,
+        });
+
+        if (!confirmed || (prompts.isCancel && prompts.isCancel(confirmed))) {
+          if (prompts.cancel) {
+            prompts.cancel('Parent execution cancelled.');
+          } else {
+            console.log(pc.yellow('Parent execution cancelled.'));
+          }
+          return;
+        }
+
+        scope = { type: 'only', targets: childTargets };
+      } else {
+        const errorMsg = `Issue #${target} is a parent/epic specification and cannot be run directly. Use --expand-children (or -y) to run its child tasks.`;
+        if (options.json) {
+          console.log(JSON.stringify({ success: false, error: errorMsg }, null, 2));
+        } else {
+          console.error(pc.red(`\n✖ Error: ${errorMsg}\n`));
+        }
+        process.exit(1);
+        return;
+      }
+    } else {
+      scope = { type: 'from', target };
+    }
   } else {
     scope = { type: 'all' };
   }
@@ -213,7 +293,10 @@ export async function runCommand(
     autoMerge: options.autoMerge,
     repo: options.repo,
     promptTemplate: options.promptTemplate,
+    parentContext: options.parentContext,
     cwd: options.cwd,
+    githubService,
+    gatingEvaluator,
   };
 
   const runner = runnerFactory

@@ -43,6 +43,7 @@ export interface TemplateContext {
     number?: number | string;
     title?: string;
     url?: string;
+    body?: string;
     [key: string]: any;
   };
   retry?: {
@@ -62,6 +63,8 @@ export interface TemplateContext {
   parentNumber?: number | string;
   parentTitle?: string;
   parentUrl?: string;
+  parentBody?: string;
+  parentContext?: 'reference' | 'inline' | 'none';
   retryAttempt?: number | string;
   retryMaxAttempts?: number | string;
   retryFeedback?: string;
@@ -251,6 +254,12 @@ export class PromptTemplateEngine {
         return context.parent?.url ?? context.parentUrl;
       case 'parent.url':
         return context.parent?.url ?? context.parentUrl;
+      case 'parentBody':
+        return context.parent?.body ?? context.parentBody;
+      case 'parent.body':
+        return context.parent?.body ?? context.parentBody;
+      case 'parentContext':
+        return context.parentContext;
       case 'retryAttempt':
         return context.retry?.attempt ?? context.retryAttempt;
       case 'retry.attempt':

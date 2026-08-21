@@ -327,10 +327,59 @@ export class BatonRunner extends EventEmitter {
         .substring(0, 30);
       const branchName = `issue-${issueNumber}-${titleSlug || 'worker'}`;
 
-      const parentMatch =
-        issue.body?.match(/Part of #(\d+)/i) ||
-        issue.body?.match(/Parent:\s*#(\d+)/i);
-      const parentNumber = parentMatch ? parseInt(parentMatch[1], 10) : undefined;
+      const parentNumbers =
+        typeof this.gatingEvaluator.parseParentReferences === 'function'
+          ? this.gatingEvaluator.parseParentReferences(issue.body || '')
+          : (issue.body?.match(/(?:Part of|Parent(?: Issue)?|Epic)[:\s]+#(\d+)/gi) || []).map((m: string) => {
+              const num = m.match(/\d+/);
+              return num ? parseInt(num[0], 10) : 0;
+            }).filter((n: number) => n > 0);
+      const parentNumber = parentNumbers.length > 0 ? parentNumbers[0] : undefined;
+      const parentContextMode = (this.options.parentContext ?? config.parentContext ?? 'reference') as
+        | 'reference'
+        | 'inline'
+        | 'none';
+
+      let parentObj:
+        | {
+            number?: number | string;
+            title?: string;
+            url?: string;
+            body?: string;
+          }
+        | undefined = undefined;
+
+      let parentNumberAlias: number | undefined = undefined;
+      let parentTitleAlias: string | undefined = undefined;
+      let parentUrlAlias: string | undefined = undefined;
+      let parentBodyAlias: string | undefined = undefined;
+
+      if (parentContextMode !== 'none' && parentNumber !== undefined) {
+        let parentIssueObj: any = null;
+        try {
+          parentIssueObj = await this.githubService.getIssue(parentNumber, targetRepo);
+        } catch {
+          // Ignore fetch error, fallback to basic metadata
+        }
+
+        const parentUrl =
+          parentIssueObj?.url || `https://github.com/${targetRepo}/issues/${parentNumber}`;
+        const parentTitle = parentIssueObj?.title || '';
+        const parentBody =
+          parentContextMode === 'inline' ? parentIssueObj?.body || '' : undefined;
+
+        parentObj = {
+          number: parentNumber,
+          title: parentTitle,
+          url: parentUrl,
+          ...(parentBody !== undefined ? { body: parentBody } : {}),
+        };
+
+        parentNumberAlias = parentNumber;
+        parentTitleAlias = parentTitle;
+        parentUrlAlias = parentUrl;
+        parentBodyAlias = parentBody;
+      }
 
       const templateContext: TemplateContext = {
         issue: {
@@ -349,13 +398,7 @@ export class BatonRunner extends EventEmitter {
         branch: {
           name: branchName,
         },
-        parent: parentNumber
-          ? {
-              number: parentNumber,
-              title: '',
-              url: `https://github.com/${targetRepo}/issues/${parentNumber}`,
-            }
-          : undefined,
+        parent: parentObj,
         retry: {
           attempt: 1,
           maxAttempts,
@@ -366,6 +409,11 @@ export class BatonRunner extends EventEmitter {
         issueBody: issue.body || '',
         issueUrl: issue.url || `https://github.com/${targetRepo}/issues/${issueNumber}`,
         branchName,
+        parentNumber: parentNumberAlias,
+        parentTitle: parentTitleAlias,
+        parentUrl: parentUrlAlias,
+        parentBody: parentBodyAlias,
+        parentContext: parentContextMode,
       };
 
       const workerPrompt = this.promptTemplateEngine.interpolate(
@@ -396,6 +444,27 @@ export class BatonRunner extends EventEmitter {
       const issueDurationMs = Date.now() - issueStartTime;
 
       if (superviseResult.success) {
+        // Sync parent checklist and post progress comment on parent issues
+        if (parentNumbers.length > 0) {
+          for (const parentNum of parentNumbers) {
+            try {
+              await this.githubService.syncParentChecklist(parentNum, issueNumber, targetRepo);
+            } catch {
+              // Ignore checklist sync errors
+            }
+            try {
+              await this.githubService.postParentProgressComment({
+                parentNumber: parentNum,
+                childNumber: issueNumber,
+                childTitle: issue.title,
+                repo: targetRepo,
+              });
+            } catch {
+              // Ignore progress comment errors
+            }
+          }
+        }
+
         this.emit('worker:phase', {
           issueNumber,
           phase: 'close',

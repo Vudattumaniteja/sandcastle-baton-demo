@@ -375,5 +375,36 @@ describe('PromptTemplateEngine', () => {
       expect(result).toContain('gh pr merge --merge');
       expect(result).toContain('gh issue close 42');
     });
+
+    it('should interpolate parent issue metadata including parent.body and parentBody', () => {
+      const engine = new PromptTemplateEngine();
+      const template = [
+        'Issue: #{{issue.number}}',
+        'Parent: #{{parent.number}} - {{parent.title}} ({{parent.url}})',
+        'Parent Body:',
+        '{{parent.body}}',
+        'Parent Context Mode: {{parentContext}}',
+      ].join('\n');
+
+      const context: TemplateContext = {
+        issue: { number: 44, title: 'Child issue' },
+        parent: {
+          number: 40,
+          title: 'Parent Epic Specification',
+          url: 'https://github.com/owner/repo/issues/40',
+          body: 'This is the parent epic description.\nIncludes requirements.',
+        },
+        parentContext: 'inline',
+      };
+
+      const result = engine.interpolate(template, context);
+
+      expect(result).toContain('Issue: #44');
+      expect(result).toContain('Parent: #40 - Parent Epic Specification (https://github.com/owner/repo/issues/40)');
+      expect(result).toContain('This is the parent epic description.');
+      expect(result).toContain('Includes requirements.');
+      expect(result).toContain('Parent Context Mode: inline');
+    });
   });
 });
+

@@ -42,6 +42,7 @@ The table below details all supported configuration keys:
 | **`retries`** | Number | Integer `>= 0` | `2` | Number of automated retry attempts permitted per issue upon test/worker failure. |
 | **`autoPr`** | Boolean | `true`, `false` | `true` | Automatically open a Pull Request upon verified local tests. |
 | **`autoMerge`** | Boolean | `true`, `false` | `true` | Automatically merge the created Pull Request. |
+| **`parentContext`** | String | `reference`, `inline`, `none` | `reference` | Parent issue context injection mode in prompt context. |
 | **`repo`** | String | `owner/repo` string | `""` *(auto-detected)* | Target GitHub repository. If omitted, automatically resolved from git remote. |
 
 ---

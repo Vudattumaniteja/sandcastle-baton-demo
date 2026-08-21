@@ -355,4 +355,134 @@ describe('GitHubService', () => {
       );
     });
   });
+
+  describe('Parent Issue Progress Synchronization & Audit Comments', () => {
+    it('should check off child task in parent issue body when checkbox line exists', async () => {
+      const parentIssue = {
+        number: 40,
+        title: 'Epic: Architecture',
+        body: '## Roadmap\n- [ ] #41: Parent classification\n- [ ] #42: Prompt template engine\n- [ ] #43: CLI execution scopes\n',
+        state: 'OPEN',
+        labels: [{ name: 'epic' }],
+      };
+
+      mockExecutor
+        .mockResolvedValueOnce({ stdout: JSON.stringify(parentIssue), stderr: '', exitCode: 0 }) // getIssue
+        .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 }); // issue edit --body
+
+      const service = new GitHubService({ repo: 'owner/repo', executor: mockExecutor });
+      const updated = await service.syncParentChecklist(40, 42);
+
+      expect(updated).toBe(true);
+      expect(mockExecutor).toHaveBeenNthCalledWith(
+        1,
+        'gh',
+        ['issue', 'view', '40', '--repo', 'owner/repo', '--json', 'number,title,body,state,labels,url,comments'],
+        expect.any(Object)
+      );
+      expect(mockExecutor).toHaveBeenNthCalledWith(
+        2,
+        'gh',
+        [
+          'issue',
+          'edit',
+          '40',
+          '--repo',
+          'owner/repo',
+          '--body',
+          '## Roadmap\n- [ ] #41: Parent classification\n- [x] #42: Prompt template engine\n- [ ] #43: CLI execution scopes\n',
+        ],
+        expect.any(Object)
+      );
+    });
+
+    it('should handle asterisk checkboxes and markdown link references for child tasks', async () => {
+      const parentIssue = {
+        number: 40,
+        title: 'Epic: Architecture',
+        body: '## Tasks\n* [ ] [#44: Parent direct run](https://github.com/owner/repo/issues/44)\n',
+        state: 'OPEN',
+        labels: [{ name: 'epic' }],
+      };
+
+      mockExecutor
+        .mockResolvedValueOnce({ stdout: JSON.stringify(parentIssue), stderr: '', exitCode: 0 })
+        .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 });
+
+      const service = new GitHubService({ repo: 'owner/repo', executor: mockExecutor });
+      const updated = await service.syncParentChecklist(40, 44);
+
+      expect(updated).toBe(true);
+      expect(mockExecutor).toHaveBeenNthCalledWith(
+        2,
+        'gh',
+        [
+          'issue',
+          'edit',
+          '40',
+          '--repo',
+          'owner/repo',
+          '--body',
+          '## Tasks\n* [x] [#44: Parent direct run](https://github.com/owner/repo/issues/44)\n',
+        ],
+        expect.any(Object)
+      );
+    });
+
+    it('should return false and avoid edit when checkbox is already checked or no checkbox exists', async () => {
+      const parentIssue = {
+        number: 40,
+        title: 'Epic: Architecture',
+        body: '## Tasks\n- [x] #42: Already completed\n- Part of #43 without checkbox\n',
+        state: 'OPEN',
+        labels: [{ name: 'epic' }],
+      };
+
+      mockExecutor.mockResolvedValueOnce({ stdout: JSON.stringify(parentIssue), stderr: '', exitCode: 0 });
+
+      const service = new GitHubService({ repo: 'owner/repo', executor: mockExecutor });
+      const updated = await service.syncParentChecklist(40, 42);
+
+      expect(updated).toBe(false);
+      expect(mockExecutor).toHaveBeenCalledTimes(1); // Only getIssue
+    });
+
+    it('should post a structured progress comment on the parent issue with changes, verification, and testing notes', async () => {
+      mockExecutor.mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 });
+
+      const service = new GitHubService({ repo: 'owner/repo', executor: mockExecutor });
+      await service.postParentProgressComment({
+        parentNumber: 40,
+        childNumber: 44,
+        childTitle: 'feat: Parent Issue Direct Execution',
+        changes: 'Implemented child expansion, parent checklist sync, and parentContext modes.',
+        verification: '100% green unit tests and verification builds passed.',
+        testingNotes: 'All 18 test suites passing cleanly with 0 regressions.',
+      });
+
+      expect(mockExecutor).toHaveBeenCalledWith(
+        'gh',
+        [
+          'issue',
+          'comment',
+          '40',
+          '--repo',
+          'owner/repo',
+          '--body',
+          expect.stringContaining('## 📋 Child Issue Completed: #44 - feat: Parent Issue Direct Execution'),
+        ],
+        expect.any(Object)
+      );
+
+      const commentArg = mockExecutor.mock.calls[0][1][6];
+      expect(commentArg).toContain('### Changes Implemented');
+      expect(commentArg).toContain('Implemented child expansion, parent checklist sync, and parentContext modes.');
+      expect(commentArg).toContain('### Verification Results');
+      expect(commentArg).toContain('100% green unit tests and verification builds passed.');
+      expect(commentArg).toContain('### Testing Notes');
+      expect(commentArg).toContain('All 18 test suites passing cleanly with 0 regressions.');
+      expect(commentArg).toContain('_Sandcastle autonomous parent progress synchronization._');
+    });
+  });
 });
+

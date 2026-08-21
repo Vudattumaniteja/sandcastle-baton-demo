@@ -62,6 +62,19 @@ program
   .option('--auto-pr', 'Automatically create Pull Request upon verified tests', true)
   .option('--auto-merge', 'Automatically merge Pull Request upon creation', true)
   .option('--prompt-template <path>', 'Path to custom markdown prompt template')
+  .option(
+    '--parent-context <mode>',
+    "Parent issue context injection mode ('reference', 'inline', 'none')",
+    'reference'
+  )
+  .option(
+    '--expand-children',
+    'Expand parent issue and execute child tasks'
+  )
+  .option(
+    '-y, --yes',
+    'Automatically confirm prompts (e.g. expand children)'
+  )
   .option('--json', 'Output structured JSON format')
   .option('--quiet', 'Suppress non-essential progress output')
   .action(async (target, options) => {

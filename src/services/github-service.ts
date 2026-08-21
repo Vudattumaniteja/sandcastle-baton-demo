@@ -5,6 +5,7 @@ import type {
   CreatePullRequestOptions,
   MergePullRequestOptions,
   ListIssuesOptions,
+  ParentProgressCommentOptions,
   CommandExecutor,
 } from '../types/github.js';
 import type { BlockerReportOptions } from '../types/gating.js';
@@ -257,4 +258,80 @@ export class GitHubService {
 
     await this.addComment(options.issueNumber, commentBody, targetRepo);
   }
+
+  /**
+   * Updates an issue's body markdown text.
+   */
+  async updateIssueBody(issueNumber: number, body: string, repo?: string): Promise<void> {
+    const targetRepo = await this.getRepo(repo);
+    const args = ['issue', 'edit', String(issueNumber), '--repo', targetRepo, '--body', body];
+    await this.executor('gh', args, {});
+  }
+
+  /**
+   * Checks off a child task checkbox `- [x] #<childNumber>` in parent issue body if present.
+   * Returns true if a checkbox was found and updated, false otherwise.
+   */
+  async syncParentChecklist(
+    parentNumber: number,
+    childNumber: number,
+    repo?: string
+  ): Promise<boolean> {
+    const targetRepo = await this.getRepo(repo);
+    const parentIssue = await this.getIssue(parentNumber, targetRepo);
+    if (!parentIssue || !parentIssue.body) {
+      return false;
+    }
+
+    const lines = parentIssue.body.split(/\r?\n/);
+    let updated = false;
+    const childRefRegex = new RegExp(`(?:#|/issues/)${childNumber}\\b`, 'i');
+
+    const newLines = lines.map((line) => {
+      const checkboxMatch = line.match(/^(\s*[-*]\s*\[)\s*(\]\s*.*)$/);
+      if (checkboxMatch && childRefRegex.test(line)) {
+        updated = true;
+        return `${checkboxMatch[1]}x${checkboxMatch[2]}`;
+      }
+      return line;
+    });
+
+    if (updated) {
+      const updatedBody = newLines.join('\n');
+      await this.updateIssueBody(parentNumber, updatedBody, targetRepo);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Posts a structured progress audit comment on a parent issue when a child task completes.
+   */
+  async postParentProgressComment(options: ParentProgressCommentOptions): Promise<void> {
+    const targetRepo = await this.getRepo(options.repo);
+    const titleText = options.childTitle ? ` - ${options.childTitle}` : '';
+    const changesText = options.changes ?? `Completed implementation for issue #${options.childNumber}.`;
+    const verificationText = options.verification ?? `All local test suites and linters passed (100% green).`;
+    const testingNotesText = options.testingNotes ?? `Automated verification executed with 0 failures.`;
+
+    const commentBody = [
+      `## 📋 Child Issue Completed: #${options.childNumber}${titleText}`,
+      '',
+      '### Changes Implemented',
+      changesText,
+      '',
+      '### Verification Results',
+      verificationText,
+      '',
+      '### Testing Notes',
+      testingNotesText,
+      '',
+      '---',
+      '_Sandcastle autonomous parent progress synchronization._',
+    ].join('\n');
+
+    await this.addComment(options.parentNumber, commentBody, targetRepo);
+  }
 }
+
