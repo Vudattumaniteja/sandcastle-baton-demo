@@ -330,7 +330,7 @@ export function resolveCandidateQuotaInfo(
     }
   }
 
-  // Evaluate all candidate pools present in the snapshot
+  // Evaluate all candidate pools present in the snapshot in priority order
   const evaluatedCandidates: StatuslineQuotaInfo[] = [];
 
   for (const key of candidateKeys) {
@@ -350,28 +350,18 @@ export function resolveCandidateQuotaInfo(
     }
   }
 
-  // Multi-tier quota resolution:
-  // A model is constrained by the bottleneck (minimum remaining_fraction) among all its candidate pools.
-  // E.g., if a 5-hour pool is at 0% (exhausted), the model cannot be used (0% quota) with its 5h countdown.
-  // If a 5-hour pool is replenished (100%) but weekly pool is at 52%, the actual available quota is 52%.
-  // If fractions are tied, pick the candidate with an active reset countdown (> 0).
   if (evaluatedCandidates.length === 0) {
     return undefined;
   }
 
-  return evaluatedCandidates.reduce((bottleneck, current) => {
-    if (current.remaining_fraction < bottleneck.remaining_fraction) {
-      return current;
-    }
-    if (current.remaining_fraction === bottleneck.remaining_fraction) {
-      const currentReset = current.reset_in_seconds ?? 0;
-      const bottleneckReset = bottleneck.reset_in_seconds ?? 0;
-      if (currentReset > 0 && bottleneckReset === 0) {
-        return current;
-      }
-    }
-    return bottleneck;
-  });
+  // 1. If any candidate pool is exhausted (0%), prioritize the 0% rate limit and its reset countdown
+  const exhaustedCandidate = evaluatedCandidates.find((c) => c.remaining_fraction === 0);
+  if (exhaustedCandidate) {
+    return exhaustedCandidate;
+  }
+
+  // 2. Otherwise, select the primary operational candidate pool in priority order (e.g. exact model -> 5-hour pool -> weekly pool)
+  return evaluatedCandidates[0];
 }
 
 export class AntigravityService {
