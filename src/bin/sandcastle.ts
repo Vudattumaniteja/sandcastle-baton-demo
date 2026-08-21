@@ -36,8 +36,16 @@ program
 
 // 1. run command
 program
-  .command('run [issue]')
+  .command('run [target]')
   .description('Run an autonomous issue baton loop')
+  .option(
+    '-f, --from <num>',
+    'Sequential backlog resumption starting from issue number'
+  )
+  .option(
+    '-o, --only <issues...>',
+    'Cherry-picked execution targeting specific issue(s) (e.g. 42 or 42,45)'
+  )
   .option('-a, --all', 'Process all open ready issues in backlog sequentially')
   .option('-m, --model <name>', 'LLM model to use for Antigravity workers')
   .option(
@@ -56,8 +64,8 @@ program
   .option('--prompt-template <path>', 'Path to custom markdown prompt template')
   .option('--json', 'Output structured JSON format')
   .option('--quiet', 'Suppress non-essential progress output')
-  .action(async (issue, options) => {
-    await runCommand(issue, options);
+  .action(async (target, options) => {
+    await runCommand(target, options);
   });
 
 // 2. status command

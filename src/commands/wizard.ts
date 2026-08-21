@@ -212,6 +212,11 @@ export async function wizardCommand(
     autoMerge: true,
     issues: issuesToRun,
     all: isAll,
+    scope: isAll
+      ? { type: 'all' }
+      : issuesToRun && issuesToRun.length > 0
+      ? { type: 'only', targets: issuesToRun }
+      : undefined,
   };
 
   const manifestCard = formatLaunchManifest(manifest);
@@ -232,6 +237,7 @@ export async function wizardCommand(
     repo: manifest.repo,
     issues: manifest.issues,
     all: manifest.all,
+    scope: manifest.scope,
     model: manifest.model,
     reasoningEffort: manifest.reasoningEffort,
     mode: manifest.mode,

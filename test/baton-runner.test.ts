@@ -485,5 +485,176 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       expect(executedPrompt).toContain('Custom prompt for #42: Prompt Engine Support on repo owner/repo');
       expect(executedPrompt).toContain('under branch issue-42-prompt-engine-support');
     });
+
+    it('should resolve queue for scope { type: "from", target } starting from target when open and record scope in snapshot', async () => {
+      const mockIssues: GitHubIssue[] = [
+        { number: 10, title: 'Old Issue', body: '', state: 'OPEN', labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }] },
+        { number: 20, title: 'Target Issue', body: '', state: 'OPEN', labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }] },
+        { number: 25, title: 'Future Issue', body: '', state: 'OPEN', labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }] },
+      ];
+
+      const mockGitHubService = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn((num: number) => Promise.resolve(mockIssues.find((i) => i.number === num))),
+        listIssues: vi.fn().mockResolvedValue(mockIssues),
+        closeIssue: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const mockGatingEvaluator = {
+        evaluateIssue: vi.fn((issue: GitHubIssue) =>
+          Promise.resolve({
+            issueNumber: issue.number,
+            title: issue.title,
+            state: 'OPEN',
+            status: 'READY',
+            isReady: true,
+            reasons: ['Ready'],
+          })
+        ),
+      };
+
+      const mockProcessSupervisor = {
+        execute: vi.fn().mockResolvedValue({
+          success: true,
+          status: 'completed',
+          attempts: 1,
+          totalDurationMs: 300,
+        }),
+      };
+
+      const runner = new BatonRunner({
+        repo: 'owner/repo',
+        scope: { type: 'from', target: 20 },
+        githubService: mockGitHubService as any,
+        gatingEvaluator: mockGatingEvaluator as any,
+        processSupervisor: mockProcessSupervisor as any,
+        stateFilePath,
+        mode: 'afk',
+      });
+
+      const result = await runner.run();
+
+      expect(result.success).toBe(true);
+      expect(result.totalProcessed).toBe(2);
+      expect(result.closedIssues).toEqual([20, 25]);
+
+      // Check snapshot
+      const snapshot: BatonRunSnapshot = JSON.parse(fs.readFileSync(stateFilePath, 'utf-8'));
+      expect(snapshot.scope).toEqual({ type: 'from', target: 20 });
+    });
+
+    it('should resolve queue for scope { type: "from", target } starting from next lowest open issue if target is closed', async () => {
+      // Issue 20 is closed, so listIssues only returns open issues: 10, 22, 25
+      const mockIssues: GitHubIssue[] = [
+        { number: 10, title: 'Old Issue', body: '', state: 'OPEN', labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }] },
+        { number: 22, title: 'Next Open Issue', body: '', state: 'OPEN', labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }] },
+        { number: 25, title: 'Future Issue', body: '', state: 'OPEN', labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }] },
+      ];
+
+      const mockGitHubService = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn((num: number) => Promise.resolve(mockIssues.find((i) => i.number === num))),
+        listIssues: vi.fn().mockResolvedValue(mockIssues),
+        closeIssue: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const mockGatingEvaluator = {
+        evaluateIssue: vi.fn((issue: GitHubIssue) =>
+          Promise.resolve({
+            issueNumber: issue.number,
+            title: issue.title,
+            state: 'OPEN',
+            status: 'READY',
+            isReady: true,
+            reasons: ['Ready'],
+          })
+        ),
+      };
+
+      const mockProcessSupervisor = {
+        execute: vi.fn().mockResolvedValue({
+          success: true,
+          status: 'completed',
+          attempts: 1,
+          totalDurationMs: 300,
+        }),
+      };
+
+      const runner = new BatonRunner({
+        repo: 'owner/repo',
+        from: 20,
+        githubService: mockGitHubService as any,
+        gatingEvaluator: mockGatingEvaluator as any,
+        processSupervisor: mockProcessSupervisor as any,
+        stateFilePath,
+        mode: 'afk',
+      });
+
+      const result = await runner.run();
+
+      expect(result.success).toBe(true);
+      expect(result.totalProcessed).toBe(2);
+      expect(result.closedIssues).toEqual([22, 25]);
+    });
+
+    it('should resolve queue for scope { type: "only", targets } in exact specified order and halt', async () => {
+      const mockIssues: GitHubIssue[] = [
+        { number: 45, title: 'Issue 45', body: '', state: 'OPEN', labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }] },
+        { number: 42, title: 'Issue 42', body: '', state: 'OPEN', labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }] },
+      ];
+
+      const mockGitHubService = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn((num: number) => Promise.resolve(mockIssues.find((i) => i.number === num))),
+        listIssues: vi.fn().mockResolvedValue(mockIssues),
+        closeIssue: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const mockGatingEvaluator = {
+        evaluateIssue: vi.fn((issue: GitHubIssue) =>
+          Promise.resolve({
+            issueNumber: issue.number,
+            title: issue.title,
+            state: 'OPEN',
+            status: 'READY',
+            isReady: true,
+            reasons: ['Ready'],
+          })
+        ),
+      };
+
+      const executedIssues: number[] = [];
+      const mockProcessSupervisor = {
+        execute: vi.fn().mockImplementation((workerOptions) => {
+          executedIssues.push(workerOptions.issueNumber);
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 300,
+          });
+        }),
+      };
+
+      const runner = new BatonRunner({
+        repo: 'owner/repo',
+        scope: { type: 'only', targets: [45, 42] },
+        githubService: mockGitHubService as any,
+        gatingEvaluator: mockGatingEvaluator as any,
+        processSupervisor: mockProcessSupervisor as any,
+        stateFilePath,
+        mode: 'afk',
+      });
+
+      const result = await runner.run();
+
+      expect(result.success).toBe(true);
+      expect(result.totalProcessed).toBe(2);
+      expect(result.closedIssues).toEqual([45, 42]);
+      expect(executedIssues).toEqual([45, 42]);
+
+      const snapshot: BatonRunSnapshot = JSON.parse(fs.readFileSync(stateFilePath, 'utf-8'));
+      expect(snapshot.scope).toEqual({ type: 'only', targets: [45, 42] });
+    });
   });
 });
