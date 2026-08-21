@@ -8,3 +8,4 @@ export * from './doctor.js';
 export * from './wizard.js';
 export * from './transcript.js';
 export * from './watch.js';
+export * from './handoff.js';

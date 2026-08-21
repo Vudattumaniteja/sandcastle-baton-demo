@@ -333,7 +333,7 @@ export async function runCommand(
     });
 
     runner.on('worker:start', ({ issueNumber, title, attempt, maxAttempts }) => {
-      console.log(`\n${pc.magenta('▶')} ${pc.bold(`Issue #${issueNumber}`)}: ${pc.bold(title)} (Attempt ${attempt}/${maxAttempts})`);
+      console.log(`\n${pc.cyan('▶')} ${pc.bold(`Issue #${issueNumber}`)}: ${pc.bold(title)} (Attempt ${attempt}/${maxAttempts})`);
     });
 
     runner.on('worker:phase', ({ phase, message }) => {

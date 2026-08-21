@@ -26,6 +26,8 @@ export * from './core/baton-runner.js';
 export * from './core/prompt-template.js';
 export * from './core/transcript-tailer.js';
 export * from './ui/formatters.js';
+export * from './ui/handoff-formatter.js';
+export * from './ui/handoff-transition.js';
 export * from './ui/watch-monitor.js';
 export * from './commands/wizard.js';
 export * from './commands/run.js';
