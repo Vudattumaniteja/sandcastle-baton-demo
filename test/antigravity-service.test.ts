@@ -62,10 +62,11 @@ describe('AntigravityService', () => {
       expect(models[0].id).toBe('Gemini 3.7 Flash');
     });
 
-    it('should read statusline snapshot from last_statusline_input.json', async () => {
+    it('should read statusline snapshot and normalize active quota from last_statusline_input.json', async () => {
       const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-statusline-test-'));
       const statuslinePath = path.join(tempDir, 'last_statusline_input.json');
 
+      const futureResetTime = new Date(Date.now() + 3600 * 1000).toISOString();
       const mockData = {
         session_id: 'session-123',
         conversation_id: 'conv-456',
@@ -84,8 +85,8 @@ describe('AntigravityService', () => {
         quota: {
           'gemini-5h': {
             remaining_fraction: 0.85,
-            reset_time: '2026-08-14T22:00:00Z',
-            reset_in_seconds: 3600,
+            reset_time: futureResetTime,
+            reset_in_seconds: 120, // Stale seconds on disk
           },
         },
         agent_state: 'working',
@@ -100,6 +101,37 @@ describe('AntigravityService', () => {
       expect(snapshot?.session_id).toBe('session-123');
       expect(snapshot?.model?.id).toBe('Gemini 3.7 Flash (High)');
       expect(snapshot?.quota?.['gemini-5h']?.remaining_fraction).toBe(0.85);
+      // Dynamic countdown recalculated (~3600s instead of stale 120s)
+      expect(snapshot?.quota?.['gemini-5h']?.reset_in_seconds).toBeGreaterThanOrEqual(3590);
+      expect(snapshot?.quota?.['gemini-5h']?.reset_in_seconds).toBeLessThanOrEqual(3600);
+
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it('should normalize expired quota pools to 100% and 0s reset when reading statusline snapshot', async () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-statusline-expired-test-'));
+      const statuslinePath = path.join(tempDir, 'last_statusline_input.json');
+
+      const pastResetTime = new Date(Date.now() - 60 * 1000).toISOString();
+      const mockData = {
+        session_id: 'session-expired',
+        quota: {
+          'gemini-5h': {
+            remaining_fraction: 0.0, // Exhausted quota in stale statusline
+            reset_time: pastResetTime,
+            reset_in_seconds: 300,
+          },
+        },
+      };
+
+      fs.writeFileSync(statuslinePath, JSON.stringify(mockData), 'utf-8');
+
+      const service = new AntigravityService({ appDataDir: tempDir });
+      const snapshot = await service.getStatuslineSnapshot();
+
+      expect(snapshot).not.toBeNull();
+      expect(snapshot?.quota?.['gemini-5h']?.remaining_fraction).toBe(1.0);
+      expect(snapshot?.quota?.['gemini-5h']?.reset_in_seconds).toBe(0);
 
       fs.rmSync(tempDir, { recursive: true, force: true });
     });
@@ -108,6 +140,101 @@ describe('AntigravityService', () => {
       const service = new AntigravityService({ appDataDir: '/nonexistent/path' });
       const snapshot = await service.getStatuslineSnapshot();
       expect(snapshot).toBeNull();
+    });
+  });
+
+  describe('Quota Snapshot Normalization & Time Decay', () => {
+    it('should normalize expired quota pool to 100% fraction and 0 seconds reset', async () => {
+      const { normalizeQuotaInfo } = await import('../src/services/antigravity-service.js');
+      const now = new Date('2026-08-21T12:00:00.000Z');
+      const expiredInfo = {
+        remaining_fraction: 0.0,
+        reset_time: '2026-08-21T11:59:00.000Z', // 1 minute in the past
+        reset_in_seconds: 60,
+      };
+
+      const normalized = normalizeQuotaInfo(expiredInfo, now);
+      expect(normalized.remaining_fraction).toBe(1.0);
+      expect(normalized.reset_in_seconds).toBe(0);
+      expect(normalized.reset_time).toBe('2026-08-21T11:59:00.000Z');
+    });
+
+    it('should dynamically calculate remaining seconds for active quota pools', async () => {
+      const { normalizeQuotaInfo } = await import('../src/services/antigravity-service.js');
+      const now = new Date('2026-08-21T12:00:00.000Z');
+      const activeInfo = {
+        remaining_fraction: 0.45,
+        reset_time: '2026-08-21T12:15:30.000Z', // 15m 30s in the future (930s)
+        reset_in_seconds: 10, // Stale seconds
+      };
+
+      const normalized = normalizeQuotaInfo(activeInfo, now);
+      expect(normalized.remaining_fraction).toBe(0.45);
+      expect(normalized.reset_in_seconds).toBe(930);
+    });
+
+    it('should handle edge cases gracefully (missing reset_time, invalid timestamps)', async () => {
+      const { normalizeQuotaInfo } = await import('../src/services/antigravity-service.js');
+      const now = new Date('2026-08-21T12:00:00.000Z');
+
+      // Missing reset_time
+      const noResetTime = {
+        remaining_fraction: 0.7,
+        reset_in_seconds: 500,
+      };
+      const normalizedNoReset = normalizeQuotaInfo(noResetTime, now);
+      expect(normalizedNoReset.remaining_fraction).toBe(0.7);
+      expect(normalizedNoReset.reset_in_seconds).toBe(500);
+
+      // Invalid timestamp
+      const invalidResetTime = {
+        remaining_fraction: 0.3,
+        reset_time: 'not-a-valid-date-string',
+        reset_in_seconds: 250,
+      };
+      const normalizedInvalid = normalizeQuotaInfo(invalidResetTime, now);
+      expect(normalizedInvalid.remaining_fraction).toBe(0.3);
+      expect(normalizedInvalid.reset_in_seconds).toBe(250);
+      expect(normalizedInvalid.reset_time).toBe('not-a-valid-date-string');
+    });
+
+    it('should normalize full statusline snapshot with multiple pools across time states', async () => {
+      const { normalizeStatuslineSnapshot } = await import('../src/services/antigravity-service.js');
+      const now = new Date('2026-08-21T12:00:00.000Z');
+      const snapshot: any = {
+        session_id: 'sess-multi',
+        quota: {
+          'gemini-5h': {
+            remaining_fraction: 0.0,
+            reset_time: '2026-08-21T11:30:00.000Z', // Expired 30 min ago
+            reset_in_seconds: 1200,
+          },
+          '3p-5h': {
+            remaining_fraction: 0.6,
+            reset_time: '2026-08-21T13:00:00.000Z', // Active, resets in 3600s
+            reset_in_seconds: 4000,
+          },
+          'custom-no-time': {
+            remaining_fraction: 0.8,
+          },
+        },
+      };
+
+      const normalized = normalizeStatuslineSnapshot(snapshot, now);
+      expect(normalized?.quota?.['gemini-5h']?.remaining_fraction).toBe(1.0);
+      expect(normalized?.quota?.['gemini-5h']?.reset_in_seconds).toBe(0);
+
+      expect(normalized?.quota?.['3p-5h']?.remaining_fraction).toBe(0.6);
+      expect(normalized?.quota?.['3p-5h']?.reset_in_seconds).toBe(3600);
+
+      expect(normalized?.quota?.['custom-no-time']?.remaining_fraction).toBe(0.8);
+      expect(normalized?.quota?.['custom-no-time']?.reset_in_seconds).toBeUndefined();
+    });
+
+    it('should handle null or undefined snapshots safely in normalizeStatuslineSnapshot', async () => {
+      const { normalizeStatuslineSnapshot } = await import('../src/services/antigravity-service.js');
+      expect(normalizeStatuslineSnapshot(null)).toBeNull();
+      expect(normalizeStatuslineSnapshot(undefined)).toBeNull();
     });
   });
 
