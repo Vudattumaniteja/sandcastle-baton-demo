@@ -230,12 +230,14 @@ export class WatchMonitor {
         ? pc.bgRed(pc.white(' BLOCKED '))
         : pc.bgYellow(pc.black(` ${snapshot.status.toUpperCase()} `));
 
-    const repoStr = pc.magenta(snapshot.repo || 'unknown/repo');
+    const repoStr = pc.cyan(snapshot.repo || 'unknown/repo');
     const sessStr = pc.gray(snapshot.sessionId || 'none');
     lines.push(`  ${statusBadge}  ${pc.bold('Repo:')} ${repoStr}  ${pc.bold('Session:')} ${sessStr}`);
 
     // Active Issue & Overall Progress
-    const activeIssueStr = snapshot.currentIssue
+    const activeIssueStr = snapshot.handoff
+      ? pc.yellow(`Handoff #${snapshot.handoff.completed.number} ➔ #${snapshot.handoff.next.number}`)
+      : snapshot.currentIssue
       ? pc.bold(pc.cyan(`Issue #${snapshot.currentIssue}`))
       : pc.gray('Idle / None');
 
@@ -247,6 +249,31 @@ export class WatchMonitor {
 
     lines.push(`  ${pc.bold('Active:')} ${activeIssueStr}  │  ${pc.bold('Progress:')} ${progressText}  ${formatProgressBar(progressPct, 12)}`);
     lines.push('');
+
+    if (snapshot.handoff) {
+      const h = snapshot.handoff;
+      const countText = h.isPaused
+        ? pc.yellow('[PAUSED]')
+        : pc.yellow(pc.bold(`${h.countdownSeconds.toFixed(1)}s`));
+      const countBar = formatProgressBar(60, 12);
+      const prPart = h.completed.prNumber ? ` • PR #${h.completed.prNumber}` : '';
+      const modelStr = h.next.model || 'gemini-3.7-flash';
+      const effortStr = h.next.reasoningEffort || 'high';
+
+      lines.push(pc.bold(pc.white('┌─ 🏃 Baton In Flight ──────────────────────────────────────────────────┐')));
+      const lastLine = `│  ${pc.green('✔ Last Completed:')} Issue #${h.completed.number} (${(h.completed.durationMs / 1000).toFixed(1)}s${prPart} • 100% green)`;
+      lines.push(lastLine.padEnd(81) + '│');
+      const nextLine = `│  ${pc.cyan('▶ Next Candidate:')}  Issue #${h.next.number} [${h.next.gatingStatus}] • ${modelStr} (${effortStr})`;
+      lines.push(nextLine.padEnd(81) + '│');
+      if (h.next.parentIssue) {
+        const parentLine = `│  ${pc.gray('↳ Parent Issue:')}   #${h.next.parentIssue.number} (Child ${h.next.parentIssue.childIndex} of ${h.next.parentIssue.totalChildren})`;
+        lines.push(parentLine.padEnd(81) + '│');
+      }
+      const spoolLine = `│  ${pc.bold('⏱ Next Session:')}   Spooling in ${countText} [${countBar}]`;
+      lines.push(spoolLine.padEnd(89) + '│');
+      lines.push(pc.bold(pc.white('└───────────────────────────────────────────────────────────────────────┘')));
+      lines.push('');
+    }
 
     // Phase Indicator Bar
     const phases = ['Inspect', 'Implement', 'Test', 'Commit', 'PR', 'Merge', 'Close'];

@@ -58,7 +58,7 @@ export async function statusCommand(
   console.log(`\n${pc.bold(pc.cyan('Sandcastle Baton Run Status'))}`);
   console.log(pc.gray('===============================================\n'));
   console.log(`  ${pc.bold('Session ID:')}   ${pc.gray(snapshot.sessionId)}`);
-  console.log(`  ${pc.bold('Repository:')}   ${pc.magenta(snapshot.repo)}`);
+  console.log(`  ${pc.bold('Repository:')}   ${pc.cyan(snapshot.repo)}`);
   console.log(`  ${pc.bold('Mode:')}         ${snapshot.mode}`);
   console.log(`  ${pc.bold('Status:')}       ${statusColor(snapshot.status.toUpperCase())}`);
   if (snapshot.currentIssue) {

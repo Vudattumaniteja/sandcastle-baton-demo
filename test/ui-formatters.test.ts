@@ -286,4 +286,45 @@ describe('UI Formatters & Badges (Variant A TUI Flow)', () => {
       expect(formatPhaseMessage('close', 26)).toContain('Closing');
     });
   });
+
+  describe('Baton Handoff Note Cards & Clean Palette', () => {
+    it('should format note card displaying summary, queue progress, next candidate preview, and parent mapping', async () => {
+      const { renderWizardMode } = await import('../src/ui/handoff-formatter.js');
+      const card = renderWizardMode({
+        mode: 'wizard',
+        queueIndex: 2,
+        totalQueue: 5,
+        countdownSeconds: 3.0,
+        isPaused: false,
+        completed: {
+          number: 36,
+          title: 'CLI execution flags',
+          durationMs: 42800,
+          prNumber: 12,
+          testsPassed: 14,
+        },
+        next: {
+          number: 37,
+          title: 'Visual baton handoff',
+          gatingStatus: 'READY',
+          parentIssue: {
+            number: 34,
+            childIndex: 3,
+            totalChildren: 5,
+          },
+          model: 'gemini-3.7-flash',
+          reasoningEffort: 'high',
+        },
+      });
+
+      expect(card).toContain('Issue #36 closed successfully');
+      expect(card).toContain('2/5 issues closed (40%)');
+      expect(card).toContain('Next Up:');
+      expect(card).toContain('#37');
+      expect(card).toContain('[READY]');
+      expect(card).toContain('Child 3 of 5');
+      expect(card).toContain('gemini-3.7-flash (high reasoning)');
+      expect(card).not.toMatch(/\x1b\[(35|45|95|105)m/);
+    });
+  });
 });

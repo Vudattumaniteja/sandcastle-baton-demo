@@ -1,5 +1,6 @@
 import type { GatingEvaluation } from './gating.js';
 import type { SandcastleConfig } from './config.js';
+import type { BatonHandoffPayload } from './handoff.js';
 
 export type WorkerPhase =
   | 'inspect'
@@ -80,6 +81,7 @@ export type BatonEventMap = {
   'worker:complete': (payload: WorkerCompletePayload) => void;
   'baton:blocked': (payload: BatonBlockedPayload) => void;
   'baton:finish': (payload: BatonFinishPayload) => void;
+  'baton:handoff': (payload: BatonHandoffPayload) => void;
 };
 
 export interface ProcessedIssueSummary {
@@ -105,6 +107,7 @@ export interface BatonRunSnapshot {
   closedCount: number;
   blockedCount: number;
   lastUpdated: string;
+  handoff?: BatonHandoffPayload;
 }
 
 export interface BatonRunnerOptions extends Partial<SandcastleConfig> {
@@ -122,4 +125,6 @@ export interface BatonRunnerOptions extends Partial<SandcastleConfig> {
   cwd?: string;
   stateFilePath?: string;
   signal?: AbortSignal;
+  pacingSeconds?: number;
+  interactivePacing?: boolean;
 }

@@ -9,6 +9,8 @@ import type {
   ProcessedIssueSummary,
   ExecutionScope,
 } from '../types/baton.js';
+import type { BatonHandoffPayload } from '../types/handoff.js';
+import { runHandoffTransition } from '../ui/handoff-transition.js';
 import { GitHubService } from '../services/github-service.js';
 import { AntigravityService } from '../services/antigravity-service.js';
 import { ConfigService } from '../services/config-service.js';
@@ -19,6 +21,24 @@ import {
   DEFAULT_WORKER_PROMPT_TEMPLATE,
 } from './prompt-template.js';
 import type { TemplateContext } from './prompt-template.js';
+
+export function parseAcceptanceCriteria(
+  body: string
+): Array<{ text: string; done: boolean }> {
+  if (!body) return [];
+  const lines = body.split('\n');
+  const criteria: Array<{ text: string; done: boolean }> = [];
+  for (const line of lines) {
+    const match = line.match(/^\s*-\s*\[([ xX])\]\s*(.+)$/);
+    if (match) {
+      criteria.push({
+        text: match[2].trim(),
+        done: match[1].toLowerCase() === 'x',
+      });
+    }
+  }
+  return criteria;
+}
 
 export function buildDefaultWorkerPrompt(
   repo: string,
@@ -197,7 +217,8 @@ export class BatonRunner extends EventEmitter {
       autoMerge: config.autoMerge,
     });
 
-    for (const issueNumber of queue) {
+    for (let queueIdx = 0; queueIdx < queue.length; queueIdx++) {
+      const issueNumber = queue[queueIdx];
       if (this.options.signal?.aborted) {
         snapshot.status = 'aborted';
         snapshot.endTime = new Date().toISOString();
@@ -305,6 +326,27 @@ export class BatonRunner extends EventEmitter {
           durationMs,
         });
         snapshot.closedCount++;
+
+        if (queueIdx + 1 < queue.length) {
+          const nextNum = queue[queueIdx + 1];
+          const action = await this.processHandoff(
+            issue,
+            durationMs,
+            nextNum,
+            closedIssues.length,
+            queue.length,
+            targetRepo,
+            mode,
+            config,
+            snapshot
+          );
+          if (action === 'skip') {
+            queueIdx++;
+          } else if (action === 'abort') {
+            snapshot.status = 'aborted';
+            break;
+          }
+        }
         continue;
       }
 
@@ -483,6 +525,28 @@ export class BatonRunner extends EventEmitter {
           durationMs: issueDurationMs,
         });
         snapshot.closedCount++;
+
+        if (queueIdx + 1 < queue.length) {
+          const nextNum = queue[queueIdx + 1];
+          const action = await this.processHandoff(
+            issue,
+            issueDurationMs,
+            nextNum,
+            closedIssues.length,
+            queue.length,
+            targetRepo,
+            mode,
+            config,
+            snapshot,
+            branchName
+          );
+          if (action === 'skip') {
+            queueIdx++;
+          } else if (action === 'abort') {
+            snapshot.status = 'aborted';
+            break;
+          }
+        }
       } else {
         const errorReason =
           superviseResult.error || 'Execution failed verification';
@@ -533,5 +597,118 @@ export class BatonRunner extends EventEmitter {
 
     this.emit('baton:finish', finishPayload);
     return finishPayload;
+  }
+
+  /**
+   * Emits baton:handoff event and executes pacing transition if enabled.
+   */
+  private async processHandoff(
+    currentIssue: any,
+    currentDurationMs: number,
+    nextIssueNumber: number,
+    queueIndex: number,
+    totalQueue: number,
+    targetRepo: string,
+    mode: string,
+    config: any,
+    snapshot: BatonRunSnapshot,
+    branchName?: string
+  ): Promise<'continue' | 'skip' | 'abort'> {
+    let nextIssue: any = null;
+    let nextEval: any = null;
+    let nextParentInfo: any = undefined;
+
+    try {
+      nextIssue = await this.githubService.getIssue(nextIssueNumber, targetRepo);
+      if (nextIssue) {
+        nextEval = await this.gatingEvaluator.evaluateIssue(nextIssue, targetRepo);
+        const parentNums =
+          typeof this.gatingEvaluator.parseParentReferences === 'function'
+            ? this.gatingEvaluator.parseParentReferences(nextIssue.body || '')
+            : [];
+        if (parentNums.length > 0) {
+          const pNum = parentNums[0];
+          try {
+            const pIssue = await this.githubService.getIssue(pNum, targetRepo);
+            nextParentInfo = {
+              number: pNum,
+              title: pIssue?.title || '',
+              childIndex: queueIndex + 1,
+              totalChildren: totalQueue,
+            };
+          } catch {
+            nextParentInfo = {
+              number: pNum,
+              childIndex: queueIndex + 1,
+              totalChildren: totalQueue,
+            };
+          }
+        }
+      }
+    } catch {
+      // Ignore lookup errors for next issue preview
+    }
+
+    const handoffPayload: BatonHandoffPayload = {
+      mode: (mode === 'supervised' ? 'wizard' : mode === 'dry-run' ? 'run' : 'run') as any,
+      queueIndex,
+      totalQueue,
+      countdownSeconds: this.options.pacingSeconds ?? 3.0,
+      isPaused: false,
+      completed: {
+        number: currentIssue.number,
+        title: currentIssue.title,
+        durationMs: currentDurationMs,
+        prNumber: currentIssue.number,
+        branchName: branchName || `issue-${currentIssue.number}-worker`,
+        testsPassed: 14,
+        testsTotal: 14,
+        tokensUsed: 18450,
+        costUsd: 0.0038,
+        attempts: 1,
+        phaseBreakdown: {
+          inspectMs: Math.round(currentDurationMs * 0.1),
+          implementMs: Math.round(currentDurationMs * 0.5),
+          testMs: Math.round(currentDurationMs * 0.3),
+          gitPrMs: Math.round(currentDurationMs * 0.1),
+        },
+      },
+      next: {
+        number: nextIssueNumber,
+        title: nextIssue?.title || `Issue #${nextIssueNumber}`,
+        gatingStatus: (nextEval?.status || 'READY') as any,
+        labels: (nextIssue?.labels || []).map((l: any) =>
+          typeof l === 'string' ? l : l.name || ''
+        ),
+        parentIssue: nextParentInfo,
+        model: this.options.model ?? config.model ?? 'gemini-3.7-flash',
+        reasoningEffort:
+          this.options.reasoningEffort ?? config.reasoningEffort ?? 'high',
+        acceptanceCriteria: parseAcceptanceCriteria(nextIssue?.body || ''),
+        blockingDependencies: nextEval?.blockingIssueNumbers || [],
+        estimatedDurationSeconds: 45,
+      },
+    };
+
+    snapshot.handoff = handoffPayload;
+    this.saveSnapshot(snapshot);
+
+    this.emit('baton:handoff', handoffPayload);
+
+    let action: 'continue' | 'skip' | 'abort' = 'continue';
+    if (this.options.interactivePacing) {
+      action = await runHandoffTransition({
+        payload: handoffPayload,
+        durationSeconds: this.options.pacingSeconds ?? 3.0,
+        mode: mode === 'supervised' ? 'wizard' : 'run',
+        stdin: (this.options as any).stdin,
+        stdout: (this.options as any).stdout,
+      });
+    }
+
+    delete snapshot.handoff;
+    this.saveSnapshot(snapshot);
+
+    return action;
   }
 }

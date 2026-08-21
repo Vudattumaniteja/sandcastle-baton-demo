@@ -22,7 +22,7 @@ export function formatGatingBadge(status: GatingStatus): string {
     case 'CLOSED':
       return pc.gray('[CLOSED]');
     case 'PARENT':
-      return pc.magenta(pc.bold('[PARENT]'));
+      return pc.cyan(pc.bold('[PARENT]'));
     case 'HITL':
       return pc.cyan(pc.bold('[HITL]'));
     default:
@@ -247,3 +247,6 @@ export function formatPhaseMessage(
       return `[Phase: ${phase}] Executing issue${target}...`;
   }
 }
+
+export * from './handoff-formatter.js';
+export * from './handoff-transition.js';

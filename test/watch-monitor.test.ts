@@ -133,6 +133,74 @@ describe('WatchMonitor', () => {
     expect(rendered).toContain('Waiting for session');
   });
 
+  it('should render in-flight handoff HUD box when snapshot contains handoff state', async () => {
+    const snapshot: BatonRunSnapshot = {
+      sessionId: 'test-handoff-sess',
+      startTime: new Date(Date.now() - 45000).toISOString(),
+      status: 'running',
+      repo: 'test-owner/test-repo',
+      mode: 'afk',
+      totalIssues: 5,
+      closedCount: 2,
+      blockedCount: 0,
+      processedIssues: [
+        { number: 35, title: 'Previous Task', status: 'completed', durationMs: 25000 },
+        { number: 36, title: 'Current Task', status: 'completed', durationMs: 20000 },
+      ],
+      handoff: {
+        mode: 'watch',
+        queueIndex: 2,
+        totalQueue: 5,
+        countdownSeconds: 2.8,
+        isPaused: false,
+        completed: {
+          number: 36,
+          title: 'CLI flags & resumption',
+          durationMs: 42800,
+          prNumber: 12,
+          testsPassed: 14,
+          testsTotal: 14,
+        },
+        next: {
+          number: 37,
+          title: 'Visual Baton Handoff',
+          gatingStatus: 'READY',
+          parentIssue: {
+            number: 34,
+            childIndex: 3,
+            totalChildren: 5,
+          },
+          model: 'gemini-3.7-flash',
+          reasoningEffort: 'high',
+        },
+      },
+      lastUpdated: new Date().toISOString(),
+    };
+    fs.writeFileSync(runJsonPath, JSON.stringify(snapshot, null, 2), 'utf-8');
+
+    const outputChunks: string[] = [];
+    const mockWriter = (str: string) => outputChunks.push(str);
+
+    const monitor = new WatchMonitor({
+      cwd: tmpDir,
+      stateFilePath: runJsonPath,
+      transcriptPath,
+      writer: mockWriter,
+      renderOnce: true,
+    });
+
+    await monitor.render();
+
+    const rendered = outputChunks.join('');
+    expect(rendered).toContain('Handoff #36 ➔ #37');
+    expect(rendered).toContain('Baton In Flight');
+    expect(rendered).toContain('Issue #36');
+    expect(rendered).toContain('Issue #37');
+    expect(rendered).toContain('[READY]');
+    expect(rendered).toContain('Child 3 of 5');
+    expect(rendered).toContain('2.8s');
+  });
+
   it('should handle keyboard keypresses for q and Ctrl+C', () => {
     const mockStdin = new EventEmitter() as any;
     mockStdin.isTTY = true;
