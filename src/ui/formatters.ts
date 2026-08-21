@@ -1,6 +1,7 @@
 import pc from 'picocolors';
 import type { GatingEvaluation, GatingStatus } from '../types/gating.js';
-import type { ModelInfo, StatuslineSnapshot } from '../types/antigravity.js';
+import type { ModelInfo, StatuslineSnapshot, StatuslineQuotaInfo } from '../types/antigravity.js';
+import { normalizeQuotaInfo } from '../services/antigravity-service.js';
 import type {
   WizardPromptOption,
   WizardManifest,
@@ -68,51 +69,101 @@ export function formatIssueOption(
  */
 export function formatModelOption(
   model: ModelInfo,
-  snapshot?: StatuslineSnapshot | null
+  snapshot?: StatuslineSnapshot | null,
+  now: number | Date = Date.now()
 ): WizardPromptOption<string> {
   const isDefault = Boolean(model.isDefault);
   let quotaBadge = '';
   let resetHint = '';
 
   if (snapshot?.quota) {
-    // 1. Direct match on model ID or aliases
-    let quotaEntry =
-      snapshot.quota[model.id] ||
-      (model.aliases
-        ? model.aliases
-            .map((alias) => snapshot.quota?.[alias])
-            .find(Boolean)
-        : undefined);
+    const candidateKeys: string[] = [];
 
-    // 2. Pool-based resolution for Antigravity quota pools
-    if (!quotaEntry) {
-      const lowerId = model.id.toLowerCase();
-      if (
-        lowerId.startsWith('gemini') ||
-        lowerId.includes('flash') ||
-        lowerId.includes('pro')
-      ) {
-        quotaEntry =
-          snapshot.quota['gemini-5h'] ||
-          snapshot.quota['gemini-weekly'] ||
-          snapshot.quota['gemini'];
-      } else if (
-        lowerId.startsWith('claude') ||
-        lowerId.startsWith('gpt') ||
-        lowerId.startsWith('3p')
-      ) {
-        quotaEntry =
-          snapshot.quota['3p-5h'] ||
-          snapshot.quota['3p-weekly'] ||
-          snapshot.quota['3p'];
+    // 1. Direct match on model ID and lower-case
+    if (model.id) {
+      candidateKeys.push(model.id);
+      if (!candidateKeys.includes(model.id.toLowerCase())) {
+        candidateKeys.push(model.id.toLowerCase());
       }
     }
 
-    if (quotaEntry && typeof quotaEntry.remaining_fraction === 'number') {
-      const pct = Math.round(quotaEntry.remaining_fraction * 100);
+    // 2. Model aliases
+    if (model.aliases && Array.isArray(model.aliases)) {
+      for (const alias of model.aliases) {
+        if (alias && !candidateKeys.includes(alias)) {
+          candidateKeys.push(alias);
+        }
+        if (alias && !candidateKeys.includes(alias.toLowerCase())) {
+          candidateKeys.push(alias.toLowerCase());
+        }
+      }
+    }
+
+    // 3. Pool-based resolution for Antigravity quota tiers
+    const lowerId = (model.id || '').toLowerCase();
+    const isGeminiFamily =
+      lowerId.startsWith('gemini') ||
+      lowerId.includes('flash') ||
+      lowerId.includes('pro') ||
+      (model.aliases?.some((a) => {
+        const al = a.toLowerCase();
+        return al.startsWith('gemini') || al.includes('flash') || al.includes('pro');
+      }) ?? false);
+
+    const is3pFamily =
+      lowerId.startsWith('claude') ||
+      lowerId.startsWith('gpt') ||
+      lowerId.startsWith('3p') ||
+      lowerId.includes('sonnet') ||
+      lowerId.includes('opus') ||
+      lowerId.includes('oss') ||
+      (model.aliases?.some((a) => {
+        const al = a.toLowerCase();
+        return (
+          al.startsWith('claude') ||
+          al.startsWith('gpt') ||
+          al.startsWith('3p') ||
+          al.includes('sonnet') ||
+          al.includes('opus')
+        );
+      }) ?? false);
+
+    if (isGeminiFamily) {
+      for (const key of ['gemini-5h', 'gemini-weekly', 'gemini']) {
+        if (!candidateKeys.includes(key)) {
+          candidateKeys.push(key);
+        }
+      }
+    } else if (is3pFamily) {
+      for (const key of ['3p-5h', '3p-weekly', '3p']) {
+        if (!candidateKeys.includes(key)) {
+          candidateKeys.push(key);
+        }
+      }
+    }
+
+    // Evaluate all candidate pools present in the snapshot
+    const evaluatedCandidates: StatuslineQuotaInfo[] = [];
+
+    for (const key of candidateKeys) {
+      const rawEntry = snapshot.quota[key];
+      if (rawEntry && typeof rawEntry === 'object' && typeof rawEntry.remaining_fraction === 'number') {
+        const normalized = normalizeQuotaInfo(rawEntry, now);
+        evaluatedCandidates.push(normalized);
+      }
+    }
+
+    // Prioritize active non-expired pools (remaining_fraction > 0)
+    // If all are exhausted (0%), fall back to the primary candidate (e.g. 5h pool)
+    const selectedEntry =
+      evaluatedCandidates.find((c) => c.remaining_fraction > 0) ||
+      evaluatedCandidates[0];
+
+    if (selectedEntry && typeof selectedEntry.remaining_fraction === 'number') {
+      const pct = Math.round(selectedEntry.remaining_fraction * 100);
       quotaBadge = `[${pct}% quota]`;
-      if (quotaEntry.reset_in_seconds && quotaEntry.reset_in_seconds > 0) {
-        const mins = Math.max(1, Math.round(quotaEntry.reset_in_seconds / 60));
+      if (selectedEntry.reset_in_seconds && selectedEntry.reset_in_seconds > 0) {
+        const mins = Math.max(1, Math.round(selectedEntry.reset_in_seconds / 60));
         resetHint = `Resets in ${mins}m`;
       }
     }
