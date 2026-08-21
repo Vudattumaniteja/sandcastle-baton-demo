@@ -1,8 +1,15 @@
 import pc from 'picocolors';
 import { BatonRunner } from '../core/baton-runner.js';
-import type { BatonRunnerOptions, BatonFinishPayload } from '../types/baton.js';
+import { wizardCommand } from './wizard.js';
+import type {
+  BatonRunnerOptions,
+  BatonFinishPayload,
+  ExecutionScope,
+} from '../types/baton.js';
 
 export interface RunCommandOptions {
+  from?: string | number;
+  only?: string | number | (string | number)[];
   all?: boolean;
   model?: string;
   effort?: 'low' | 'medium' | 'high';
@@ -23,25 +30,180 @@ export type RunnerFactory = (options: BatonRunnerOptions) => {
   on: (event: string, listener: (...args: any[]) => void) => any;
 };
 
-export async function runCommand(
-  issueArg?: string,
-  options: RunCommandOptions = {},
-  runnerFactory?: RunnerFactory
-): Promise<void> {
-  const issues: number[] = [];
-  if (issueArg) {
-    const parsed = parseInt(issueArg.replace('#', ''), 10);
-    if (!isNaN(parsed) && parsed > 0) {
-      issues.push(parsed);
+export interface RunCommandDeps {
+  wizardCommand?: () => Promise<any>;
+  isTTY?: boolean;
+}
+
+export function parseIssueNumber(val: unknown): number | undefined {
+  if (val === undefined || val === null) return undefined;
+  const str = String(val).trim().replace(/^#/, '');
+  if (!str) return undefined;
+  const num = parseInt(str, 10);
+  if (isNaN(num) || num <= 0) return undefined;
+  return num;
+}
+
+export function parseOnlyTargets(val: unknown): number[] {
+  if (val === undefined || val === null) return [];
+  const rawList: string[] = [];
+  if (Array.isArray(val)) {
+    for (const item of val) {
+      if (typeof item === 'number') {
+        rawList.push(String(item));
+      } else if (typeof item === 'string') {
+        rawList.push(...item.split(','));
+      }
     }
+  } else if (typeof val === 'number') {
+    rawList.push(String(val));
+  } else if (typeof val === 'string') {
+    rawList.push(...val.split(','));
+  }
+
+  const result: number[] = [];
+  for (const str of rawList) {
+    const cleaned = str.trim().replace(/^#/, '');
+    if (!cleaned) continue;
+    const num = parseInt(cleaned, 10);
+    if (!isNaN(num) && num > 0) {
+      result.push(num);
+    }
+  }
+  return result;
+}
+
+export async function runCommand(
+  targetArg?: string,
+  options: RunCommandOptions = {},
+  runnerFactory?: RunnerFactory,
+  deps: RunCommandDeps = {}
+): Promise<void> {
+  const hasPositionalTarget =
+    targetArg !== undefined && targetArg !== null && String(targetArg).trim() !== '';
+  const hasFrom =
+    options.from !== undefined &&
+    options.from !== null &&
+    String(options.from).trim() !== '';
+  const hasOnly =
+    options.only !== undefined &&
+    options.only !== null &&
+    (Array.isArray(options.only)
+      ? options.only.length > 0
+      : String(options.only).trim() !== '');
+  const hasAll = Boolean(options.all);
+
+  const isTTY = deps.isTTY ?? Boolean(process.stdout?.isTTY);
+  const wizard = deps.wizardCommand ?? wizardCommand;
+
+  // Zero-argument execution handling
+  if (!hasPositionalTarget && !hasFrom && !hasOnly && !hasAll) {
+    if (isTTY) {
+      await wizard();
+      return;
+    } else {
+      const msg =
+        'No issue target or scope specified. Use "sandcastle run <target>", "sandcastle run --from <num>", "sandcastle run --only <issues...>", or "sandcastle run --all".';
+      if (options.json) {
+        console.log(JSON.stringify({ success: false, error: msg }, null, 2));
+      } else {
+        console.error(pc.red(`\n✖ Error: ${msg}\n`));
+      }
+      process.exit(1);
+      return;
+    }
+  }
+
+  // Conflict validation
+  const errors: string[] = [];
+
+  if (hasPositionalTarget && hasFrom) {
+    errors.push('Cannot specify both positional target and --from.');
+  }
+  if (hasPositionalTarget && hasOnly) {
+    errors.push('Cannot specify both positional target and --only.');
+  }
+  if (hasPositionalTarget && hasAll) {
+    errors.push('Cannot specify both positional target and --all.');
+  }
+  if (hasFrom && hasOnly) {
+    errors.push('Cannot specify both --from and --only.');
+  }
+  if (hasFrom && hasAll) {
+    errors.push('Cannot specify both --from and --all.');
+  }
+  if (hasOnly && hasAll) {
+    errors.push('Cannot specify both --only and --all.');
+  }
+
+  if (errors.length > 0) {
+    const errorMsg = errors.join(' ');
+    if (options.json) {
+      console.log(JSON.stringify({ success: false, error: errorMsg }, null, 2));
+    } else {
+      console.error(pc.red(`\n✖ Error: ${errorMsg}\n`));
+    }
+    process.exit(1);
+    return;
+  }
+
+  // Build ExecutionScope
+  let scope: ExecutionScope;
+
+  if (hasAll) {
+    scope = { type: 'all' };
+  } else if (hasOnly) {
+    const targets = parseOnlyTargets(options.only);
+    if (targets.length === 0) {
+      const errorMsg = `Invalid issue number(s) provided for --only: ${Array.isArray(options.only) ? options.only.join(',') : options.only}`;
+      if (options.json) {
+        console.log(JSON.stringify({ success: false, error: errorMsg }, null, 2));
+      } else {
+        console.error(pc.red(`\n✖ Error: ${errorMsg}\n`));
+      }
+      process.exit(1);
+      return;
+    }
+    scope = { type: 'only', targets };
+  } else if (hasFrom) {
+    const target = parseIssueNumber(options.from);
+    if (target === undefined) {
+      const errorMsg = `Invalid issue number provided for --from: ${options.from}`;
+      if (options.json) {
+        console.log(JSON.stringify({ success: false, error: errorMsg }, null, 2));
+      } else {
+        console.error(pc.red(`\n✖ Error: ${errorMsg}\n`));
+      }
+      process.exit(1);
+      return;
+    }
+    scope = { type: 'from', target };
+  } else if (hasPositionalTarget) {
+    const target = parseIssueNumber(targetArg);
+    if (target === undefined) {
+      const errorMsg = `Invalid positional issue target provided: ${targetArg}`;
+      if (options.json) {
+        console.log(JSON.stringify({ success: false, error: errorMsg }, null, 2));
+      } else {
+        console.error(pc.red(`\n✖ Error: ${errorMsg}\n`));
+      }
+      process.exit(1);
+      return;
+    }
+    scope = { type: 'from', target };
+  } else {
+    scope = { type: 'all' };
   }
 
   const retries =
     options.retries !== undefined ? parseInt(String(options.retries), 10) : undefined;
 
   const runnerOptions: BatonRunnerOptions = {
-    issues: issues.length > 0 ? issues : undefined,
-    all: options.all,
+    scope,
+    issues: scope.type === 'only' ? scope.targets : undefined,
+    all: scope.type === 'all',
+    from: scope.type === 'from' ? scope.target : undefined,
+    only: scope.type === 'only' ? scope.targets : undefined,
     model: options.model,
     reasoningEffort: options.effort,
     mode: options.mode,
@@ -68,6 +230,15 @@ export async function runCommand(
       console.log(`${pc.cyan('🚀 Starting Baton Run')}`);
       console.log(`   ${pc.bold('Repo:')}   ${payload.repo}`);
       console.log(`   ${pc.bold('Mode:')}   ${payload.mode}`);
+      if (payload.scope) {
+        if (payload.scope.type === 'from') {
+          console.log(`   ${pc.bold('Scope:')}  Resuming from #${payload.scope.target} onward`);
+        } else if (payload.scope.type === 'only') {
+          console.log(`   ${pc.bold('Scope:')}  Only #${payload.scope.targets.join(', #')}`);
+        } else {
+          console.log(`   ${pc.bold('Scope:')}  All ready issues`);
+        }
+      }
       console.log(`   ${pc.bold('Queue:')}  ${payload.issues.length > 0 ? payload.issues.map((n: number) => `#${n}`).join(', ') : '(all open ready)'}`);
       if (payload.model) console.log(`   ${pc.bold('Model:')}  ${payload.model}`);
       console.log('');

@@ -1,4 +1,4 @@
-import type { BatonRunnerOptions, BatonFinishPayload } from './baton.js';
+import type { BatonRunnerOptions, BatonFinishPayload, ExecutionScope } from './baton.js';
 import type { GitHubService } from '../services/github-service.js';
 import type { AntigravityService } from '../services/antigravity-service.js';
 import type { DoctorService } from '../services/doctor-service.js';
@@ -53,6 +53,7 @@ export interface WizardManifest {
   autoMerge: boolean;
   issues?: number[];
   all?: boolean;
+  scope?: ExecutionScope;
 }
 
 export interface WizardDependencies {

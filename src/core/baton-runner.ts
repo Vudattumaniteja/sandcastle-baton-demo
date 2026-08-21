@@ -7,6 +7,7 @@ import type {
   BatonRunSnapshot,
   BatonFinishPayload,
   ProcessedIssueSummary,
+  ExecutionScope,
 } from '../types/baton.js';
 import { GitHubService } from '../services/github-service.js';
 import { AntigravityService } from '../services/antigravity-service.js';
@@ -121,9 +122,41 @@ export class BatonRunner extends EventEmitter {
       | 'supervised'
       | 'dry-run';
 
+    // Resolve effective scope
+    let scope: ExecutionScope | undefined = this.options.scope;
+    if (!scope) {
+      if (this.options.all) {
+        scope = { type: 'all' };
+      } else if (this.options.from !== undefined) {
+        scope = { type: 'from', target: this.options.from };
+      } else if (this.options.only && this.options.only.length > 0) {
+        scope = { type: 'only', targets: this.options.only };
+      } else if (this.options.issues && this.options.issues.length > 0) {
+        scope = { type: 'only', targets: this.options.issues };
+      }
+    }
+
     // Resolve queue of issues to run
     let queue: number[] = [];
-    if (this.options.issues && this.options.issues.length > 0) {
+    if (scope?.type === 'all') {
+      const openIssues = await this.githubService.listIssues({
+        repo: targetRepo,
+        state: 'open',
+      });
+      queue = openIssues.map((i) => i.number).sort((a, b) => a - b);
+    } else if (scope?.type === 'from') {
+      const startNum = scope.target;
+      const openIssues = await this.githubService.listIssues({
+        repo: targetRepo,
+        state: 'open',
+      });
+      queue = openIssues
+        .filter((i) => i.number >= startNum)
+        .map((i) => i.number)
+        .sort((a, b) => a - b);
+    } else if (scope?.type === 'only') {
+      queue = [...scope.targets];
+    } else if (this.options.issues && this.options.issues.length > 0) {
       queue = [...this.options.issues];
     } else if (this.options.all) {
       const openIssues = await this.githubService.listIssues({
@@ -144,6 +177,7 @@ export class BatonRunner extends EventEmitter {
       status: 'running',
       repo: targetRepo,
       mode,
+      scope,
       processedIssues,
       totalIssues: queue.length,
       closedCount: 0,
@@ -157,6 +191,7 @@ export class BatonRunner extends EventEmitter {
       repo: targetRepo,
       mode,
       issues: queue,
+      scope,
       model: config.model,
       autoPr: config.autoPr,
       autoMerge: config.autoMerge,

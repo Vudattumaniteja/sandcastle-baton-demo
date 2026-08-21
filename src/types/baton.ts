@@ -10,10 +10,16 @@ export type WorkerPhase =
   | 'merge'
   | 'close';
 
+export type ExecutionScope =
+  | { type: 'from'; target: number }
+  | { type: 'only'; targets: number[] }
+  | { type: 'all' };
+
 export interface BatonStartPayload {
   repo: string;
   mode: 'afk' | 'supervised' | 'dry-run';
   issues: number[];
+  scope?: ExecutionScope;
   model?: string;
   autoPr?: boolean;
   autoMerge?: boolean;
@@ -92,6 +98,7 @@ export interface BatonRunSnapshot {
   status: 'running' | 'completed' | 'blocked' | 'aborted' | 'idle';
   repo: string;
   mode: string;
+  scope?: ExecutionScope;
   currentIssue?: number;
   processedIssues: ProcessedIssueSummary[];
   totalIssues: number;
@@ -103,6 +110,9 @@ export interface BatonRunSnapshot {
 export interface BatonRunnerOptions extends Partial<SandcastleConfig> {
   issues?: number[];
   all?: boolean;
+  from?: number;
+  only?: number[];
+  scope?: ExecutionScope;
   githubService?: any;
   antigravityService?: any;
   gatingEvaluator?: any;
