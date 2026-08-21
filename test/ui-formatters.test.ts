@@ -220,6 +220,141 @@ describe('UI Formatters & Badges (Variant A TUI Flow)', () => {
       expect(option.label).toContain('65% quota');
       expect(option.hint).toContain('Resets in 148m');
     });
+
+    it('should normalize expired 5-hour quota pool to 100% and eliminate false [0% quota]', () => {
+      const model: ModelInfo = {
+        id: 'Gemini 3.7 Flash (High)',
+        name: 'Gemini 3.7 Flash (High)',
+        isDefault: true,
+      };
+
+      const now = new Date('2026-08-21T12:00:00.000Z');
+      const snapshot: StatuslineSnapshot = {
+        quota: {
+          'gemini-5h': {
+            remaining_fraction: 0.0,
+            reset_time: '2026-08-21T11:45:00.000Z', // Expired 15 minutes ago
+            reset_in_seconds: 300,
+          },
+        },
+      };
+
+      const option = formatModelOption(model, snapshot, now);
+      expect(option.value).toBe('Gemini 3.7 Flash (High)');
+      expect(option.label).toContain('[100% quota]');
+      expect(option.label).not.toContain('[0% quota]');
+    });
+
+    it('should fallback to active secondary pool (e.g. gemini-weekly) when 5-hour limit was reached', () => {
+      const model: ModelInfo = {
+        id: 'Gemini 3.7 Flash (High)',
+        name: 'Gemini 3.7 Flash (High)',
+        isDefault: true,
+      };
+
+      const now = new Date('2026-08-21T12:00:00.000Z');
+      const snapshot: StatuslineSnapshot = {
+        quota: {
+          'gemini-5h': {
+            remaining_fraction: 0.0,
+            reset_time: '2026-08-21T13:00:00.000Z', // Active, resets in 1h
+            reset_in_seconds: 3600,
+          },
+          'gemini-weekly': {
+            remaining_fraction: 0.85,
+            reset_time: '2026-08-28T00:00:00.000Z',
+            reset_in_seconds: 561600,
+          },
+        },
+      };
+
+      const option = formatModelOption(model, snapshot, now);
+      expect(option.value).toBe('Gemini 3.7 Flash (High)');
+      expect(option.label).toContain('[85% quota]');
+      expect(option.label).not.toContain('[0% quota]');
+    });
+
+    it('should fallback to active 3p-weekly pool for 3P models when 3p-5h limit was reached', () => {
+      const model: ModelInfo = {
+        id: 'Claude Sonnet 4.6 (Thinking)',
+        name: 'Claude Sonnet 4.6 (Thinking)',
+        isDefault: false,
+      };
+
+      const now = new Date('2026-08-21T12:00:00.000Z');
+      const snapshot: StatuslineSnapshot = {
+        quota: {
+          '3p-5h': {
+            remaining_fraction: 0.0,
+            reset_time: '2026-08-21T12:30:00.000Z',
+            reset_in_seconds: 1800,
+          },
+          '3p-weekly': {
+            remaining_fraction: 0.40,
+            reset_time: '2026-08-28T00:00:00.000Z',
+            reset_in_seconds: 561600,
+          },
+        },
+      };
+
+      const option = formatModelOption(model, snapshot, now);
+      expect(option.value).toBe('Claude Sonnet 4.6 (Thinking)');
+      expect(option.label).toContain('[40% quota]');
+      expect(option.label).not.toContain('[0% quota]');
+    });
+
+    it('should display 0% quota and reset countdown when all candidate pools are exhausted', () => {
+      const model: ModelInfo = {
+        id: 'Gemini 3.7 Flash (High)',
+        name: 'Gemini 3.7 Flash (High)',
+        isDefault: true,
+      };
+
+      const now = new Date('2026-08-21T12:00:00.000Z');
+      const snapshot: StatuslineSnapshot = {
+        quota: {
+          'gemini-5h': {
+            remaining_fraction: 0.0,
+            reset_time: '2026-08-21T12:45:00.000Z',
+            reset_in_seconds: 2700,
+          },
+          'gemini-weekly': {
+            remaining_fraction: 0.0,
+            reset_time: '2026-08-28T00:00:00.000Z',
+            reset_in_seconds: 561600,
+          },
+        },
+      };
+
+      const option = formatModelOption(model, snapshot, now);
+      expect(option.value).toBe('Gemini 3.7 Flash (High)');
+      expect(option.label).toContain('0% quota');
+      expect(option.hint).toContain('Resets in 45m');
+    });
+
+    it('should dynamically calculate countdown from reset_time when reset_in_seconds is stale', () => {
+      const model: ModelInfo = {
+        id: 'gemini-3.7-pro',
+        name: 'gemini-3.7-pro',
+        isDefault: false,
+      };
+
+      const now = new Date('2026-08-21T12:00:00.000Z');
+      const snapshot: StatuslineSnapshot = {
+        quota: {
+          'gemini-3.7-pro': {
+            remaining_fraction: 0.50,
+            reset_time: '2026-08-21T12:20:00.000Z', // 20m in future
+            reset_in_seconds: 60, // Stale seconds
+          },
+        },
+      };
+
+      const option = formatModelOption(model, snapshot, now);
+      expect(option.value).toBe('gemini-3.7-pro');
+      expect(option.label).toContain('50% quota');
+      expect(option.hint).toContain('Resets in 20m');
+    });
   });
 
   describe('getReasoningEffortChoices', () => {
