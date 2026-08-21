@@ -245,7 +245,7 @@ describe('UI Formatters & Badges (Variant A TUI Flow)', () => {
       expect(option.label).not.toContain('[0% quota]');
     });
 
-    it('should fallback to active secondary pool (e.g. gemini-weekly) when 5-hour limit was reached', () => {
+    it('should reflect 0% exhausted pool when 5-hour limit was reached even if weekly pool has remaining fraction', () => {
       const model: ModelInfo = {
         id: 'Gemini 3.7 Flash (High)',
         name: 'Gemini 3.7 Flash (High)',
@@ -270,11 +270,11 @@ describe('UI Formatters & Badges (Variant A TUI Flow)', () => {
 
       const option = formatModelOption(model, snapshot, now);
       expect(option.value).toBe('Gemini 3.7 Flash (High)');
-      expect(option.label).toContain('[85% quota]');
-      expect(option.label).not.toContain('[0% quota]');
+      expect(option.label).toContain('[0% quota]');
+      expect(option.hint).toContain('Resets in 60m');
     });
 
-    it('should fallback to active 3p-weekly pool for 3P models when 3p-5h limit was reached', () => {
+    it('should reflect 0% exhausted pool for 3P models when 3p-5h limit was reached even if weekly pool has remaining fraction', () => {
       const model: ModelInfo = {
         id: 'Claude Sonnet 4.6 (Thinking)',
         name: 'Claude Sonnet 4.6 (Thinking)',
@@ -299,8 +299,8 @@ describe('UI Formatters & Badges (Variant A TUI Flow)', () => {
 
       const option = formatModelOption(model, snapshot, now);
       expect(option.value).toBe('Claude Sonnet 4.6 (Thinking)');
-      expect(option.label).toContain('[40% quota]');
-      expect(option.label).not.toContain('[0% quota]');
+      expect(option.label).toContain('[0% quota]');
+      expect(option.hint).toContain('Resets in 30m');
     });
 
     it('should display 0% quota and reset countdown when all candidate pools are exhausted', () => {
