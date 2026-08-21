@@ -237,18 +237,18 @@ describe('AntigravityService', () => {
       expect(normalizeStatuslineSnapshot(undefined)).toBeNull();
     });
 
-    it('should resolve bottleneck quota (lowest remaining fraction) across multi-tier pools for a model', async () => {
+    it('should resolve primary 5-hour operational pool over weekly pool for model options', async () => {
       const { resolveCandidateQuotaInfo } = await import('../src/services/antigravity-service.js');
       const now = new Date('2026-08-21T12:00:00.000Z');
       const snapshot: any = {
         quota: {
           'gemini-5h': {
-            remaining_fraction: 1.0, // Expired / full 5h pool
-            reset_time: '2026-08-21T11:00:00.000Z',
-            reset_in_seconds: 0,
+            remaining_fraction: 0.65,
+            reset_time: '2026-08-21T14:00:00.000Z', // 2h countdown
+            reset_in_seconds: 7200,
           },
           'gemini-weekly': {
-            remaining_fraction: 0.52, // 52% weekly limit
+            remaining_fraction: 0.52,
             reset_time: '2026-08-25T18:00:00.000Z',
             reset_in_seconds: 367200,
           },
@@ -257,7 +257,8 @@ describe('AntigravityService', () => {
 
       const resolved = resolveCandidateQuotaInfo('Gemini 3.7 Flash', snapshot, now);
       expect(resolved).toBeDefined();
-      expect(resolved?.remaining_fraction).toBe(0.52);
+      expect(resolved?.remaining_fraction).toBe(0.65);
+      expect(resolved?.reset_in_seconds).toBe(7200);
     });
 
     it('should prioritize 0% exhausted pool and active countdown over non-zero secondary pools', async () => {
