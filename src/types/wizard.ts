@@ -54,6 +54,7 @@ export interface WizardManifest {
   issues?: number[];
   all?: boolean;
   scope?: ExecutionScope;
+  parentContext?: 'reference' | 'inline' | 'none';
 }
 
 export interface WizardDependencies {

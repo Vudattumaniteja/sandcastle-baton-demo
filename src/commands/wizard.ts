@@ -107,7 +107,19 @@ export async function wizardCommand(
     const evalResult =
       evaluationMap.get(issue.number) ||
       (await gatingEvaluator.evaluateIssue(issue, targetRepo));
+
+    // Filter out parent and HITL issues from the main issue picker
+    if (evalResult.status === 'PARENT' || evalResult.status === 'HITL') {
+      continue;
+    }
+
     issueOptions.push(formatIssueOption(evalResult));
+  }
+
+  if (issueOptions.length === 0) {
+    s.stop(pc.yellow('No actionable issues found in repository.'));
+    prompts.cancel('No actionable issues found in repository.');
+    return { cancelled: true, error: 'No actionable issues found in repository.' };
   }
 
   const selectedIssue = await prompts.select({
@@ -123,17 +135,81 @@ export async function wizardCommand(
   let targetDescription = '';
   let issuesToRun: number[] | undefined;
   let isAll = false;
+  let scope: import('../types/baton.js').ExecutionScope;
+  let isChildTask = false;
 
   if (selectedIssue === 'all') {
     isAll = true;
-    targetDescription = `All Ready Issues (${readyCount} ready issues)`;
+    scope = { type: 'all' };
+    targetDescription = 'Full Backlog';
+    const readyIssues = openIssues.filter(
+      (i) => evaluationMap.get(i.number)?.isReady
+    );
+    isChildTask = readyIssues.some(
+      (i) => gatingEvaluator.parseParentReferences(i.body || '').length > 0
+    );
   } else {
     const issueNum = Number(selectedIssue);
-    issuesToRun = [issueNum];
-    const foundIssue = openIssues.find((i) => i.number === issueNum);
-    targetDescription = foundIssue
-      ? `Issue #${issueNum}: ${foundIssue.title}`
-      : `Issue #${issueNum}`;
+    const followUpAction = await prompts.select({
+      message: `Select execution scope for issue #${issueNum}:`,
+      options: [
+        {
+          value: 'only',
+          label: `Run only issue #${issueNum}`,
+          hint: 'Run only this issue and halt',
+        },
+        {
+          value: 'from',
+          label: `Resume backlog from #${issueNum} onward`,
+          hint: 'Run this issue and subsequent ready backlog issues sequentially',
+        },
+      ],
+      initialValue: 'only',
+    });
+
+    if (prompts.isCancel(followUpAction)) {
+      prompts.cancel('Wizard cancelled.');
+      return { cancelled: true };
+    }
+
+    if (followUpAction === 'from') {
+      scope = { type: 'from', target: issueNum };
+      targetDescription = `Backlog Resumption (from #${issueNum} onward)`;
+      const issuesInScope = openIssues.filter(
+        (i) =>
+          i.number >= issueNum &&
+          evaluationMap.get(i.number)?.status !== 'PARENT' &&
+          evaluationMap.get(i.number)?.status !== 'HITL'
+      );
+      isChildTask = issuesInScope.some(
+        (i) => gatingEvaluator.parseParentReferences(i.body || '').length > 0
+      );
+    } else {
+      issuesToRun = [issueNum];
+      scope = { type: 'only', targets: [issueNum] };
+      targetDescription = `Single Issue (#${issueNum})`;
+      const foundIssue = openIssues.find((i) => i.number === issueNum);
+      const parentRefs = foundIssue
+        ? gatingEvaluator.parseParentReferences(foundIssue.body || '')
+        : [];
+      isChildTask = parentRefs.length > 0;
+    }
+  }
+
+  // Prompt operator for parent context when executing child tasks
+  let parentContext: 'reference' | 'none' | undefined = undefined;
+  if (isChildTask) {
+    const includeParent = await prompts.confirm({
+      message: 'Include parent context in worker prompts?',
+      initialValue: true,
+    });
+
+    if (prompts.isCancel(includeParent)) {
+      prompts.cancel('Wizard cancelled.');
+      return { cancelled: true };
+    }
+
+    parentContext = includeParent ? 'reference' : 'none';
   }
 
   // 4. Model Selection
@@ -212,11 +288,8 @@ export async function wizardCommand(
     autoMerge: true,
     issues: issuesToRun,
     all: isAll,
-    scope: isAll
-      ? { type: 'all' }
-      : issuesToRun && issuesToRun.length > 0
-      ? { type: 'only', targets: issuesToRun }
-      : undefined,
+    scope,
+    parentContext,
   };
 
   const manifestCard = formatLaunchManifest(manifest);
@@ -238,6 +311,7 @@ export async function wizardCommand(
     issues: manifest.issues,
     all: manifest.all,
     scope: manifest.scope,
+    parentContext: manifest.parentContext,
     model: manifest.model,
     reasoningEffort: manifest.reasoningEffort,
     mode: manifest.mode,

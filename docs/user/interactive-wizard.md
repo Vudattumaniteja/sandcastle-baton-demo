@@ -59,7 +59,9 @@ The preflight check evaluates:
 
 ### Step 3: Backlog Issue Selection & Gating Badges
 
-The wizard fetches all open repository issues and runs them through the `GatingEvaluator` ([`src/core/gating-evaluator.ts`](file:///C:/Users/Manit/Desktop/sandcastle/src/core/gating-evaluator.ts)). Each issue is presented with a color-coded **gate** badge:
+The wizard fetches all open repository issues and runs them through the `GatingEvaluator` ([`src/core/gating-evaluator.ts`](file:///C:/Users/Manit/Desktop/sandcastle/src/core/gating-evaluator.ts)). Parent epics (`[PARENT]`) and Human-in-the-loop tickets (`[HITL]`) are automatically filtered out from the issue selection list.
+
+Each runnable issue is presented with a color-coded **gate** badge:
 
 | Gating Badge | Color | Evaluation Meaning | Prompt Hint |
 | :--- | :--- | :--- | :--- |
@@ -69,9 +71,19 @@ The wizard fetches all open repository issues and runs them through the `GatingE
 | **`[UNGATED]`** | Dim | Missing required gating labels (`ready-for-agent` or `AFK`). | *Missing ready-for-agent, AFK* |
 | **`[CLOSED]`** | Gray | Issue is already closed in GitHub tracker. | *Already closed* |
 
-#### "All Ready Issues" Option
-If at least one issue has passed gating checks (`[READY]`), the wizard displays a top-level bulk option:
-- **`All Ready Issues (N ready)`**: Runs every unblocked ready issue sequentially in backlog order until the queue is exhausted.
+#### 2-Step Issue Selection Flow
+
+1. **Top-Level Issue Picker**:
+   - **`All Ready Issues (N ready)`**: Sets `scope: { type: 'all' }` and advances directly to model selection.
+   - **Individual Issue (`#<num>`)**: Opens a follow-up action prompt.
+
+2. **Follow-Up Scope Prompt**:
+   - `Run only issue #<num>` (Default): Sets `scope: { type: 'only', targets: [num] }`.
+   - `Resume backlog from #<num> onward`: Sets `scope: { type: 'from', target: num }`.
+
+3. **Parent Context Prompt (for Child Tasks)**:
+   - When executing issues linked to a parent/epic ticket (`Part of #<num>`), the wizard prompts:
+     `Include parent context in worker prompts? [Yes / No]` (Default: `Yes`).
 
 ```text
 ? Select an issue to run with Sandcastle baton:
@@ -79,6 +91,12 @@ If at least one issue has passed gating checks (`[READY]`), the wizard displays 
   #42 Add JSON schema validation [READY] — Ready for autonomous execution
   #43 Implement retry watchdog [WAITING] — Waiting on #42
   #44 Refactor statusline parser [UNGATED] — Missing ready-for-agent, AFK
+
+? Select execution scope for issue #42:
+> Run only issue #42 — Run only this issue and halt
+  Resume backlog from #42 onward — Run this issue and subsequent ready backlog issues sequentially
+
+? Include parent context in worker prompts? (Y/n)
 ```
 
 ---
@@ -140,14 +158,14 @@ Controls worker autonomy and approval boundaries:
 
 ### Step 7: Launch Manifest Note Card & Confirmation
 
-Before any agent is spawned, the wizard presents a structured manifest summary note card:
+Before any agent is spawned, the wizard presents a structured manifest summary note card with human-readable scope targets (`Single Issue (#42)`, `Backlog Resumption (from #42 onward)`, or `Full Backlog`):
 
 ```text
 ┌  Sandcastle Launch Manifest
 │
 │  Repository:      Vudattumaniteja/sandcastle-baton-demo
 │  Active Branch:   main
-│  Target:          Issue #42: Add JSON schema validation
+│  Target:          Single Issue (#42)
 │  Model:           Gemini 3.7 Flash (High)
 │  Reasoning:       High
 │  Mode:            Autonomous AFK

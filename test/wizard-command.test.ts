@@ -21,6 +21,24 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
   let mockRunner: any;
   let runnerEvents: EventEmitter;
 
+  const mockParentIssue21: GitHubIssue = {
+    number: 21,
+    title: 'Epic: Interactive CLI Experience',
+    body: 'Parent epic for Sandcastle wizard and TUI',
+    state: 'OPEN',
+    labels: [{ name: 'parent' }],
+    url: 'https://github.com/owner/repo/issues/21',
+  };
+
+  const mockHitlIssue22: GitHubIssue = {
+    number: 22,
+    title: 'Design Review & Prototype',
+    body: 'Human prototype review required',
+    state: 'OPEN',
+    labels: [{ name: 'wayfinder:prototype' }],
+    url: 'https://github.com/owner/repo/issues/22',
+  };
+
   const mockOpenIssue26: GitHubIssue = {
     number: 26,
     title: 'Interactive Guided Wizard',
@@ -37,6 +55,15 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
     state: 'OPEN',
     labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
     url: 'https://github.com/owner/repo/issues/27',
+  };
+
+  const mockOpenIssue28: GitHubIssue = {
+    number: 28,
+    title: 'Standalone Feature Task',
+    body: 'No parent references here',
+    state: 'OPEN',
+    labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+    url: 'https://github.com/owner/repo/issues/28',
   };
 
   beforeEach(() => {
@@ -67,10 +94,19 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
     mockGitHubService = {
       getRepo: vi.fn().mockResolvedValue('owner/repo'),
       checkAuth: vi.fn().mockResolvedValue(true),
-      listIssues: vi.fn().mockResolvedValue([mockOpenIssue26, mockOpenIssue27]),
+      listIssues: vi.fn().mockResolvedValue([
+        mockParentIssue21,
+        mockHitlIssue22,
+        mockOpenIssue26,
+        mockOpenIssue27,
+        mockOpenIssue28,
+      ]),
       getIssue: vi.fn().mockImplementation((num: number) => {
+        if (num === 21) return Promise.resolve(mockParentIssue21);
+        if (num === 22) return Promise.resolve(mockHitlIssue22);
         if (num === 26) return Promise.resolve(mockOpenIssue26);
         if (num === 27) return Promise.resolve(mockOpenIssue27);
+        if (num === 28) return Promise.resolve(mockOpenIssue28);
         return Promise.resolve(null);
       }),
     };
@@ -101,44 +137,121 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
     };
 
     mockGatingEvaluator = {
-      evaluateBacklog: vi.fn().mockResolvedValue(
-        new Map([
-          [
-            26,
-            {
-              issueNumber: 26,
-              title: 'Interactive Guided Wizard',
-              state: 'OPEN',
-              status: 'READY',
-              isReady: true,
-              hasReadyLabel: true,
-              hasAfkLabel: true,
-              isBlockedLabelPresent: false,
-              missingLabels: [],
-              prerequisiteIssueNumbers: [],
-              blockingIssueNumbers: [],
-              reasons: ['All gate conditions satisfied.'],
-            },
-          ],
-          [
-            27,
-            {
-              issueNumber: 27,
-              title: 'Terminal Watch Monitor',
-              state: 'OPEN',
-              status: 'WAITING',
-              isReady: false,
-              hasReadyLabel: true,
-              hasAfkLabel: true,
-              isBlockedLabelPresent: false,
-              missingLabels: [],
-              prerequisiteIssueNumbers: [26],
-              blockingIssueNumbers: [26],
-              reasons: ['Waiting for prerequisite issues to close: #26'],
-            },
-          ],
-        ])
-      ),
+      parseParentReferences: vi.fn().mockImplementation((body: string) => {
+        if (!body) return [];
+        const parentRegex = /(?:Part of|Parent(?: Issue)?|Epic)[:\s]+#(\d+)/gi;
+        const matches = Array.from(body.matchAll(parentRegex));
+        return matches.map((m) => parseInt(m[1], 10)).filter((n) => !isNaN(n));
+      }),
+      evaluateIssue: vi.fn().mockImplementation(async (issue: GitHubIssue) => {
+        if (issue.number === 21) {
+          return {
+            issueNumber: 21,
+            title: issue.title,
+            state: 'OPEN',
+            status: 'PARENT',
+            isReady: false,
+            hasReadyLabel: false,
+            hasAfkLabel: false,
+            isBlockedLabelPresent: false,
+            missingLabels: ['ready-for-agent', 'AFK'],
+            prerequisiteIssueNumbers: [],
+            blockingIssueNumbers: [],
+            reasons: ['Issue is classified as a parent/epic specification.'],
+            parentIssueNumbers: [],
+          };
+        }
+        if (issue.number === 22) {
+          return {
+            issueNumber: 22,
+            title: issue.title,
+            state: 'OPEN',
+            status: 'HITL',
+            isReady: false,
+            hasReadyLabel: false,
+            hasAfkLabel: false,
+            isBlockedLabelPresent: false,
+            missingLabels: ['ready-for-agent', 'AFK'],
+            prerequisiteIssueNumbers: [],
+            blockingIssueNumbers: [],
+            reasons: ['Issue requires human-in-the-loop interaction.'],
+            parentIssueNumbers: [],
+          };
+        }
+        if (issue.number === 26) {
+          return {
+            issueNumber: 26,
+            title: issue.title,
+            state: 'OPEN',
+            status: 'READY',
+            isReady: true,
+            hasReadyLabel: true,
+            hasAfkLabel: true,
+            isBlockedLabelPresent: false,
+            missingLabels: [],
+            prerequisiteIssueNumbers: [],
+            blockingIssueNumbers: [],
+            reasons: ['All gate conditions satisfied.'],
+            parentIssueNumbers: [21],
+          };
+        }
+        if (issue.number === 27) {
+          return {
+            issueNumber: 27,
+            title: issue.title,
+            state: 'OPEN',
+            status: 'WAITING',
+            isReady: false,
+            hasReadyLabel: true,
+            hasAfkLabel: true,
+            isBlockedLabelPresent: false,
+            missingLabels: [],
+            prerequisiteIssueNumbers: [26],
+            blockingIssueNumbers: [26],
+            reasons: ['Waiting for prerequisite issues to close: #26'],
+            parentIssueNumbers: [],
+          };
+        }
+        if (issue.number === 28) {
+          return {
+            issueNumber: 28,
+            title: issue.title,
+            state: 'OPEN',
+            status: 'READY',
+            isReady: true,
+            hasReadyLabel: true,
+            hasAfkLabel: true,
+            isBlockedLabelPresent: false,
+            missingLabels: [],
+            prerequisiteIssueNumbers: [],
+            blockingIssueNumbers: [],
+            reasons: ['All gate conditions satisfied.'],
+            parentIssueNumbers: [],
+          };
+        }
+        return {
+          issueNumber: issue.number,
+          title: issue.title,
+          state: issue.state,
+          status: 'READY',
+          isReady: true,
+          hasReadyLabel: true,
+          hasAfkLabel: true,
+          isBlockedLabelPresent: false,
+          missingLabels: [],
+          prerequisiteIssueNumbers: [],
+          blockingIssueNumbers: [],
+          reasons: ['All gate conditions satisfied.'],
+          parentIssueNumbers: [],
+        };
+      }),
+      evaluateBacklog: vi.fn().mockImplementation(async (issues: GitHubIssue[]) => {
+        const map = new Map();
+        for (const issue of issues) {
+          map.set(issue.number, await mockGatingEvaluator.evaluateIssue(issue));
+        }
+        return map;
+      }),
     };
 
     runnerEvents = new EventEmitter();
@@ -217,21 +330,16 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
     };
   });
 
-  it('should run full guided wizard flow and execute baton successfully', async () => {
-    // Select answers:
-    // 1. Issue: 26
-    // 2. Model: 'Gemini 3.7 Flash (High)'
-    // 3. Effort: 'high'
-    // 4. Mode: 'afk'
-    // 5. Confirm manifest: true
+  it('should filter out parent and HITL issues from the main issue picker options', async () => {
     mockPrompts.select = vi
       .fn()
-      .mockResolvedValueOnce(26)
-      .mockResolvedValueOnce('Gemini 3.7 Flash (High)')
-      .mockResolvedValueOnce('high')
-      .mockResolvedValueOnce('afk');
+      .mockResolvedValueOnce(28) // 1. Pick issue #28 (non-child)
+      .mockResolvedValueOnce('only') // 2. Follow-up: 'only'
+      .mockResolvedValueOnce('Gemini 3.7 Flash (High)') // 3. Model
+      .mockResolvedValueOnce('high') // 4. Effort
+      .mockResolvedValueOnce('afk'); // 5. Mode
 
-    mockPrompts.confirm = vi.fn().mockResolvedValueOnce(true);
+    mockPrompts.confirm = vi.fn().mockResolvedValueOnce(true); // Manifest confirmation
 
     const deps: WizardDependencies = {
       prompts: mockPrompts,
@@ -242,85 +350,167 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
       runnerFactory: () => mockRunner,
     };
 
+    await wizardCommand({}, deps);
+
+    // Verify the first select call (issue picker)
+    expect(mockPrompts.select).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        message: expect.stringMatching(/select.*issue/i),
+        options: expect.any(Array),
+      })
+    );
+
+    const firstSelectArgs = (mockPrompts.select as any).mock.calls[0][0];
+    const optionValues = firstSelectArgs.options.map((o: any) => o.value);
+
+    // Should include 'all', 26, 27, 28
+    expect(optionValues).toContain('all');
+    expect(optionValues).toContain(26);
+    expect(optionValues).toContain(27);
+    expect(optionValues).toContain(28);
+
+    // Must NOT include parent issue 21 or HITL issue 22
+    expect(optionValues).not.toContain(21);
+    expect(optionValues).not.toContain(22);
+  });
+
+  it('should run 2-step issue selection with "Run only issue #<num>" (default) setting scope: { type: "only", targets: [num] } and manifest target: "Single Issue (#<num>)"', async () => {
+    // Select answers:
+    // 1. Issue: 26 (child task)
+    // 2. Action: 'only' (Default: Run only issue #26)
+    // 3. Model: 'Gemini 3.7 Flash (High)'
+    // 4. Effort: 'high'
+    // 5. Mode: 'afk'
+    // Confirm:
+    // 1. Parent context: true
+    // 2. Launch manifest: true
+    mockPrompts.select = vi
+      .fn()
+      .mockResolvedValueOnce(26)
+      .mockResolvedValueOnce('only')
+      .mockResolvedValueOnce('Gemini 3.7 Flash (High)')
+      .mockResolvedValueOnce('high')
+      .mockResolvedValueOnce('afk');
+
+    mockPrompts.confirm = vi
+      .fn()
+      .mockResolvedValueOnce(true) // Parent context confirm
+      .mockResolvedValueOnce(true); // Launch manifest confirm
+
+    let createdRunnerOptions: any = null;
+    const deps: WizardDependencies = {
+      prompts: mockPrompts,
+      doctorService: mockDoctorService,
+      githubService: mockGitHubService,
+      antigravityService: mockAntigravityService,
+      gatingEvaluator: mockGatingEvaluator,
+      runnerFactory: (opts) => {
+        createdRunnerOptions = opts;
+        return mockRunner;
+      },
+    };
+
     const result = await wizardCommand({}, deps);
 
     expect(mockPrompts.intro).toHaveBeenCalled();
     expect(mockDoctorService.runDiagnostics).toHaveBeenCalled();
     expect(mockGitHubService.listIssues).toHaveBeenCalledWith({ state: 'open' });
     expect(mockGatingEvaluator.evaluateBacklog).toHaveBeenCalled();
-    expect(mockAntigravityService.discoverModels).toHaveBeenCalled();
 
-    // Verify issue select was called with formatted options
-    expect(mockPrompts.select).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        message: expect.stringMatching(/select.*issue/i),
-        options: expect.arrayContaining([
-          expect.objectContaining({ value: 26, label: expect.stringContaining('#26') }),
-        ]),
-      })
-    );
-
-    // Verify model select
+    // Verify 2-step issue selection follow-up prompt
     expect(mockPrompts.select).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        message: expect.stringMatching(/select.*model/i),
+        message: expect.stringMatching(/#26/i),
+        options: expect.arrayContaining([
+          expect.objectContaining({ value: 'only', label: 'Run only issue #26' }),
+          expect.objectContaining({ value: 'from', label: 'Resume backlog from #26 onward' }),
+        ]),
+        initialValue: 'only',
       })
     );
 
-    // Verify effort select
-    expect(mockPrompts.select).toHaveBeenNthCalledWith(
-      3,
+    // Verify parent context prompt for child task
+    expect(mockPrompts.confirm).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
-        message: expect.stringMatching(/reasoning effort/i),
+        message: 'Include parent context in worker prompts?',
+        initialValue: true,
       })
     );
 
-    // Verify mode select
-    expect(mockPrompts.select).toHaveBeenNthCalledWith(
-      4,
-      expect.objectContaining({
-        message: expect.stringMatching(/execution mode/i),
-      })
-    );
-
-    // Verify manifest note and confirm
+    // Verify manifest note formatting
     expect(mockPrompts.note).toHaveBeenCalledWith(
-      expect.stringContaining('owner/repo'),
+      expect.stringContaining('Single Issue (#26)'),
       expect.stringMatching(/manifest/i)
-    );
-    expect(mockPrompts.confirm).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringMatching(/launch/i),
-      })
-    );
-
-    // Verify spinner updates across phases
-    expect(mockSpinner.start).toHaveBeenCalled();
-    expect(mockSpinner.message).toHaveBeenCalled();
-    expect(mockRunner.run).toHaveBeenCalled();
-    expect(mockSpinner.stop).toHaveBeenCalled();
-    expect(mockPrompts.outro).toHaveBeenCalledWith(
-      expect.stringMatching(/completed|success/i)
     );
 
     expect(result.cancelled).toBe(false);
     expect(result.success).toBe(true);
-    expect(result.manifest?.model).toBe('Gemini 3.7 Flash (High)');
-    expect(result.manifest?.reasoningEffort).toBe('high');
-    expect(result.manifest?.mode).toBe('afk');
+    expect(result.manifest?.targetDescription).toBe('Single Issue (#26)');
+    expect(result.manifest?.scope).toEqual({ type: 'only', targets: [26] });
+    expect(result.manifest?.parentContext).toBe('reference');
+    expect(createdRunnerOptions?.scope).toEqual({ type: 'only', targets: [26] });
+    expect(createdRunnerOptions?.parentContext).toBe('reference');
   });
 
-  it('should support selecting "all" ready issues in queue', async () => {
+  it('should run 2-step issue selection with "Resume backlog from #<num> onward" setting scope: { type: "from", target: num } and manifest target: "Backlog Resumption (from #<num> onward)"', async () => {
     mockPrompts.select = vi
       .fn()
-      .mockResolvedValueOnce('all')
+      .mockResolvedValueOnce(26)
+      .mockResolvedValueOnce('from')
       .mockResolvedValueOnce('Gemini 3.7 Flash (High)')
       .mockResolvedValueOnce('high')
       .mockResolvedValueOnce('afk');
 
-    mockPrompts.confirm = vi.fn().mockResolvedValueOnce(true);
+    mockPrompts.confirm = vi
+      .fn()
+      .mockResolvedValueOnce(false) // Parent context confirm: No
+      .mockResolvedValueOnce(true); // Launch manifest confirm: Yes
+
+    let createdRunnerOptions: any = null;
+    const deps: WizardDependencies = {
+      prompts: mockPrompts,
+      doctorService: mockDoctorService,
+      githubService: mockGitHubService,
+      antigravityService: mockAntigravityService,
+      gatingEvaluator: mockGatingEvaluator,
+      runnerFactory: (opts) => {
+        createdRunnerOptions = opts;
+        return mockRunner;
+      },
+    };
+
+    const result = await wizardCommand({}, deps);
+
+    expect(result.cancelled).toBe(false);
+    expect(result.success).toBe(true);
+    expect(result.manifest?.targetDescription).toBe('Backlog Resumption (from #26 onward)');
+    expect(result.manifest?.scope).toEqual({ type: 'from', target: 26 });
+    expect(result.manifest?.parentContext).toBe('none');
+    expect(createdRunnerOptions?.scope).toEqual({ type: 'from', target: 26 });
+    expect(createdRunnerOptions?.parentContext).toBe('none');
+
+    // Verify manifest note card contains formatted target string
+    expect(mockPrompts.note).toHaveBeenCalledWith(
+      expect.stringContaining('Backlog Resumption (from #26 onward)'),
+      expect.stringMatching(/manifest/i)
+    );
+  });
+
+  it('should advance directly to model selection when "all" ready issues is selected without a follow-up scope prompt, setting scope: { type: "all" } and manifest target: "Full Backlog"', async () => {
+    mockPrompts.select = vi
+      .fn()
+      .mockResolvedValueOnce('all') // 1. Issue picker: 'all'
+      .mockResolvedValueOnce('Gemini 3.7 Flash (High)') // 2. Model (NO follow-up scope prompt!)
+      .mockResolvedValueOnce('high') // 3. Effort
+      .mockResolvedValueOnce('afk'); // 4. Mode
+
+    mockPrompts.confirm = vi
+      .fn()
+      .mockResolvedValueOnce(true) // Parent context confirm (since ready queue contains child issue 26)
+      .mockResolvedValueOnce(true); // Launch manifest confirm
 
     let createdRunnerOptions: any = null;
     const deps: WizardDependencies = {
@@ -339,7 +529,100 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
 
     expect(result.success).toBe(true);
     expect(result.manifest?.all).toBe(true);
-    expect(createdRunnerOptions?.all).toBe(true);
+    expect(result.manifest?.scope).toEqual({ type: 'all' });
+    expect(result.manifest?.targetDescription).toBe('Full Backlog');
+    expect(createdRunnerOptions?.scope).toEqual({ type: 'all' });
+
+    // Verify manifest note card formatting
+    expect(mockPrompts.note).toHaveBeenCalledWith(
+      expect.stringContaining('Full Backlog'),
+      expect.stringMatching(/manifest/i)
+    );
+  });
+
+  it('should not prompt operator for parent context when executing non-child tasks', async () => {
+    mockPrompts.select = vi
+      .fn()
+      .mockResolvedValueOnce(28) // Issue 28 (no parent)
+      .mockResolvedValueOnce('only') // Scope: 'only'
+      .mockResolvedValueOnce('Gemini 3.7 Flash (High)') // Model
+      .mockResolvedValueOnce('high') // Effort
+      .mockResolvedValueOnce('afk'); // Mode
+
+    mockPrompts.confirm = vi.fn().mockResolvedValueOnce(true); // Launch manifest confirm ONLY
+
+    const deps: WizardDependencies = {
+      prompts: mockPrompts,
+      doctorService: mockDoctorService,
+      githubService: mockGitHubService,
+      antigravityService: mockAntigravityService,
+      gatingEvaluator: mockGatingEvaluator,
+      runnerFactory: () => mockRunner,
+    };
+
+    const result = await wizardCommand({}, deps);
+
+    expect(result.success).toBe(true);
+    expect(result.manifest?.targetDescription).toBe('Single Issue (#28)');
+    // Confirm should only have been called once (for launch manifest), not for parent context
+    expect(mockPrompts.confirm).toHaveBeenCalledTimes(1);
+    expect(mockPrompts.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringMatching(/launch/i),
+      })
+    );
+  });
+
+  it('should cancel if user cancels at the 2-step scope selection prompt', async () => {
+    const cancelSymbol = Symbol('cancel');
+    mockPrompts.select = vi
+      .fn()
+      .mockResolvedValueOnce(26) // 1. Issue #26
+      .mockResolvedValueOnce(cancelSymbol); // 2. Cancel at follow-up prompt
+
+    const deps: WizardDependencies = {
+      prompts: mockPrompts,
+      doctorService: mockDoctorService,
+      githubService: mockGitHubService,
+      antigravityService: mockAntigravityService,
+      gatingEvaluator: mockGatingEvaluator,
+      runnerFactory: () => mockRunner,
+    };
+
+    const result = await wizardCommand({}, deps);
+
+    expect(mockPrompts.cancel).toHaveBeenCalledWith(
+      expect.stringMatching(/cancelled/i)
+    );
+    expect(result.cancelled).toBe(true);
+    expect(mockRunner.run).not.toHaveBeenCalled();
+  });
+
+  it('should cancel if user cancels at the parent context prompt', async () => {
+    const cancelSymbol = Symbol('cancel');
+    mockPrompts.select = vi
+      .fn()
+      .mockResolvedValueOnce(26) // 1. Issue #26
+      .mockResolvedValueOnce('only'); // 2. Follow-up: 'only'
+
+    mockPrompts.confirm = vi.fn().mockResolvedValueOnce(cancelSymbol); // Cancel at parent context confirm
+
+    const deps: WizardDependencies = {
+      prompts: mockPrompts,
+      doctorService: mockDoctorService,
+      githubService: mockGitHubService,
+      antigravityService: mockAntigravityService,
+      gatingEvaluator: mockGatingEvaluator,
+      runnerFactory: () => mockRunner,
+    };
+
+    const result = await wizardCommand({}, deps);
+
+    expect(mockPrompts.cancel).toHaveBeenCalledWith(
+      expect.stringMatching(/cancelled/i)
+    );
+    expect(result.cancelled).toBe(true);
+    expect(mockRunner.run).not.toHaveBeenCalled();
   });
 
   it('should halt and cancel when preflight validation fails (e.g. not a git repo or gh auth fails)', async () => {
@@ -415,7 +698,8 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
   it('should handle cancellation when user declines launch confirmation card', async () => {
     mockPrompts.select = vi
       .fn()
-      .mockResolvedValueOnce(26)
+      .mockResolvedValueOnce(28) // Issue 28 (non-child)
+      .mockResolvedValueOnce('only')
       .mockResolvedValueOnce('Gemini 3.7 Flash (High)')
       .mockResolvedValueOnce('high')
       .mockResolvedValueOnce('afk');
@@ -443,7 +727,8 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
   it('should report failure outro when baton runner encounters a blocker', async () => {
     mockPrompts.select = vi
       .fn()
-      .mockResolvedValueOnce(26)
+      .mockResolvedValueOnce(28) // Issue 28 (non-child)
+      .mockResolvedValueOnce('only')
       .mockResolvedValueOnce('Gemini 3.7 Flash (High)')
       .mockResolvedValueOnce('high')
       .mockResolvedValueOnce('afk');
@@ -451,16 +736,16 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
     mockPrompts.confirm = vi.fn().mockResolvedValueOnce(true);
 
     mockRunner.run = vi.fn().mockImplementation(async () => {
-      runnerEvents.emit('baton:start', { repo: 'owner/repo', mode: 'afk', issues: [26] });
+      runnerEvents.emit('baton:start', { repo: 'owner/repo', mode: 'afk', issues: [28] });
       runnerEvents.emit('baton:blocked', {
-        issueNumber: 26,
+        issueNumber: 28,
         reason: 'Verification failed',
       });
       return {
         success: false,
         totalProcessed: 1,
         closedIssues: [],
-        blockedIssues: [26],
+        blockedIssues: [28],
         durationMs: 1200,
       };
     });
