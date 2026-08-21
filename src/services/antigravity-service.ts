@@ -250,6 +250,114 @@ export function normalizeStatuslineSnapshot(
   };
 }
 
+/**
+ * Resolves candidate quota pool info for a given model or identifier from a statusline snapshot.
+ */
+export function resolveCandidateQuotaInfo(
+  model?: ModelInfo | string,
+  snapshot?: StatuslineSnapshot | null,
+  now: number | Date = Date.now()
+): StatuslineQuotaInfo | undefined {
+  if (!snapshot?.quota) {
+    return undefined;
+  }
+
+  const modelId = typeof model === 'string' ? model : model?.id;
+  const modelAliases = typeof model === 'object' && model ? model.aliases : undefined;
+
+  const candidateKeys: string[] = [];
+
+  // 1. Direct match on model ID and lower-case
+  if (modelId) {
+    candidateKeys.push(modelId);
+    if (!candidateKeys.includes(modelId.toLowerCase())) {
+      candidateKeys.push(modelId.toLowerCase());
+    }
+  }
+
+  // 2. Model aliases
+  if (modelAliases && Array.isArray(modelAliases)) {
+    for (const alias of modelAliases) {
+      if (alias && !candidateKeys.includes(alias)) {
+        candidateKeys.push(alias);
+      }
+      if (alias && !candidateKeys.includes(alias.toLowerCase())) {
+        candidateKeys.push(alias.toLowerCase());
+      }
+    }
+  }
+
+  // 3. Pool-based resolution for Antigravity quota tiers
+  const lowerId = (modelId || '').toLowerCase();
+  const isGeminiFamily =
+    lowerId.startsWith('gemini') ||
+    lowerId.includes('flash') ||
+    lowerId.includes('pro') ||
+    (modelAliases?.some((a) => {
+      const al = a.toLowerCase();
+      return al.startsWith('gemini') || al.includes('flash') || al.includes('pro');
+    }) ?? false);
+
+  const is3pFamily =
+    lowerId.startsWith('claude') ||
+    lowerId.startsWith('gpt') ||
+    lowerId.startsWith('3p') ||
+    lowerId.includes('sonnet') ||
+    lowerId.includes('opus') ||
+    lowerId.includes('oss') ||
+    (modelAliases?.some((a) => {
+      const al = a.toLowerCase();
+      return (
+        al.startsWith('claude') ||
+        al.startsWith('gpt') ||
+        al.startsWith('3p') ||
+        al.includes('sonnet') ||
+        al.includes('opus')
+      );
+    }) ?? false);
+
+  if (isGeminiFamily) {
+    for (const key of ['gemini-5h', 'gemini-weekly', 'gemini']) {
+      if (!candidateKeys.includes(key)) {
+        candidateKeys.push(key);
+      }
+    }
+  } else if (is3pFamily) {
+    for (const key of ['3p-5h', '3p-weekly', '3p']) {
+      if (!candidateKeys.includes(key)) {
+        candidateKeys.push(key);
+      }
+    }
+  }
+
+  // Evaluate all candidate pools present in the snapshot
+  const evaluatedCandidates: StatuslineQuotaInfo[] = [];
+
+  for (const key of candidateKeys) {
+    const rawEntry = snapshot.quota[key];
+    if (rawEntry && typeof rawEntry === 'object' && typeof rawEntry.remaining_fraction === 'number') {
+      const normalized = normalizeQuotaInfo(rawEntry, now);
+      evaluatedCandidates.push(normalized);
+    }
+  }
+
+  // If no candidates matched by model name/family, evaluate any remaining pools in snapshot as fallback
+  if (evaluatedCandidates.length === 0) {
+    for (const rawEntry of Object.values(snapshot.quota)) {
+      if (rawEntry && typeof rawEntry === 'object' && typeof rawEntry.remaining_fraction === 'number') {
+        evaluatedCandidates.push(normalizeQuotaInfo(rawEntry, now));
+      }
+    }
+  }
+
+  // Prioritize active non-expired pools (remaining_fraction > 0)
+  // If all are exhausted (0%), fall back to the primary candidate (e.g. 5h pool)
+  return (
+    evaluatedCandidates.find((c) => c.remaining_fraction > 0) ||
+    evaluatedCandidates[0]
+  );
+}
+
 export class AntigravityService {
   private customAgyPath: string;
   private appDataDir?: string;

@@ -102,14 +102,35 @@ export class ProcessSupervisor {
   /**
    * Calculates quota backoff delay using statusline snapshot or fallback duration.
    */
-  async resolveQuotaDelayMs(): Promise<number> {
+  async resolveQuotaDelayMs(now: number | Date = Date.now()): Promise<number> {
     try {
-      const snapshot = await this.antigravityService.getStatuslineSnapshot();
+      const nowMs = typeof now === 'number' ? now : now.getTime();
+      const snapshot = await this.antigravityService.getStatuslineSnapshot(now);
       if (snapshot?.quota) {
         for (const key of Object.keys(snapshot.quota)) {
           const q = snapshot.quota[key];
-          if (q && q.remaining_fraction === 0 && q.reset_in_seconds && q.reset_in_seconds > 0) {
-            return Math.min(q.reset_in_seconds * 1000, 300000); // capped at 5 minutes
+          if (!q) continue;
+
+          // Ignore expired quota pools (reset_time <= now)
+          if (q.reset_time && typeof q.reset_time === 'string') {
+            const resetMs = new Date(q.reset_time).getTime();
+            if (!isNaN(resetMs) && resetMs <= nowMs) {
+              continue;
+            }
+          }
+
+          if (q.remaining_fraction === 0) {
+            let delaySeconds = q.reset_in_seconds;
+            if (q.reset_time && typeof q.reset_time === 'string') {
+              const resetMs = new Date(q.reset_time).getTime();
+              if (!isNaN(resetMs)) {
+                delaySeconds = Math.max(0, Math.round((resetMs - nowMs) / 1000));
+              }
+            }
+
+            if (delaySeconds && delaySeconds > 0) {
+              return Math.min(delaySeconds * 1000, 300000); // capped at 5 minutes
+            }
           }
         }
       }

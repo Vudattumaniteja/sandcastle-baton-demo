@@ -192,6 +192,51 @@ describe('ProcessSupervisor', () => {
       expect(supervisor.isQuotaError({ exitCode: 1, stderr: 'Rate limit reached, retry after 30s', stdout: '' })).toBe(true);
       expect(supervisor.isQuotaError({ exitCode: 1, stderr: 'TypeError: undefined is not a function', stdout: '' })).toBe(false);
     });
+
+    it('should ignore expired quota pools (reset_time <= now) and select active pool for delay', async () => {
+      const now = new Date('2026-08-21T12:00:00.000Z');
+      mockAntigravityService.getStatuslineSnapshot = vi.fn().mockResolvedValue({
+        quota: {
+          'gemini-5h': {
+            remaining_fraction: 0,
+            reset_time: '2026-08-21T11:50:00.000Z', // Expired 10m ago
+            reset_in_seconds: 60, // Stale seconds
+          },
+          'gemini-weekly': {
+            remaining_fraction: 0,
+            reset_time: '2026-08-21T12:02:00.000Z', // Active, resets in 2m (120s)
+            reset_in_seconds: 120,
+          },
+        },
+      });
+
+      const supervisor = new ProcessSupervisor({
+        antigravityService: mockAntigravityService as AntigravityService,
+      });
+
+      const delayMs = await supervisor.resolveQuotaDelayMs(now);
+      expect(delayMs).toBe(120000);
+    });
+
+    it('should fallback to default 60s delay when all exhausted quota pools are expired', async () => {
+      const now = new Date('2026-08-21T12:00:00.000Z');
+      mockAntigravityService.getStatuslineSnapshot = vi.fn().mockResolvedValue({
+        quota: {
+          'gemini-5h': {
+            remaining_fraction: 0,
+            reset_time: '2026-08-21T11:45:00.000Z', // Expired 15m ago
+            reset_in_seconds: 0,
+          },
+        },
+      });
+
+      const supervisor = new ProcessSupervisor({
+        antigravityService: mockAntigravityService as AntigravityService,
+      });
+
+      const delayMs = await supervisor.resolveQuotaDelayMs(now);
+      expect(delayMs).toBe(60000);
+    });
   });
 
   describe('Outer Watchdog Timeout Enforcement', () => {
