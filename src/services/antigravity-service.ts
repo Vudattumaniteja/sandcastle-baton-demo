@@ -5,6 +5,7 @@ import os from 'os';
 import type {
   ModelInfo,
   StatuslineSnapshot,
+  StatuslineQuotaInfo,
   AntigravityWorkerOptions,
   AntigravityWorkerResult,
   AntigravityServiceOptions,
@@ -182,6 +183,73 @@ export function resolveAgyModel(modelName?: string, effort?: string): string {
   return trimmed;
 }
 
+/**
+ * Normalizes a single quota info object based on current timestamp and reset_time.
+ */
+export function normalizeQuotaInfo(
+  info: StatuslineQuotaInfo,
+  now: number | Date = Date.now()
+): StatuslineQuotaInfo {
+  if (!info || typeof info !== 'object') {
+    return info;
+  }
+
+  const nowMs = typeof now === 'number' ? now : now.getTime();
+
+  if (info.reset_time && typeof info.reset_time === 'string') {
+    const resetDate = new Date(info.reset_time);
+    const resetMs = resetDate.getTime();
+
+    if (!isNaN(resetMs)) {
+      if (resetMs <= nowMs) {
+        return {
+          ...info,
+          remaining_fraction: 1.0,
+          reset_in_seconds: 0,
+        };
+      } else {
+        const remainingSeconds = Math.max(0, Math.round((resetMs - nowMs) / 1000));
+        return {
+          ...info,
+          reset_in_seconds: remainingSeconds,
+        };
+      }
+    }
+  }
+
+  return { ...info };
+}
+
+/**
+ * Normalizes all quota pools in a StatuslineSnapshot based on time-decay and reset timestamps.
+ */
+export function normalizeStatuslineSnapshot(
+  snapshot: StatuslineSnapshot | null | undefined,
+  now: number | Date = Date.now()
+): StatuslineSnapshot | null {
+  if (!snapshot) {
+    return null;
+  }
+
+  if (!snapshot.quota || typeof snapshot.quota !== 'object') {
+    return { ...snapshot };
+  }
+
+  const normalizedQuota: Record<string, StatuslineQuotaInfo> = {};
+  for (const [poolKey, poolInfo] of Object.entries(snapshot.quota)) {
+    if (poolInfo && typeof poolInfo === 'object') {
+      normalizedQuota[poolKey] = normalizeQuotaInfo(poolInfo, now);
+    } else {
+      normalizedQuota[poolKey] = poolInfo;
+    }
+  }
+
+  return {
+    ...snapshot,
+    quota: normalizedQuota,
+  };
+}
+
 export class AntigravityService {
   private customAgyPath: string;
   private appDataDir?: string;
@@ -300,9 +368,19 @@ export class AntigravityService {
   }
 
   /**
+   * Normalizes a StatuslineSnapshot with time-decay and reset awareness.
+   */
+  normalizeQuotaSnapshot(
+    snapshot: StatuslineSnapshot | null | undefined,
+    now: number | Date = Date.now()
+  ): StatuslineSnapshot | null {
+    return normalizeStatuslineSnapshot(snapshot, now);
+  }
+
+  /**
    * Reads live state and quota from `last_statusline_input.json`.
    */
-  async getStatuslineSnapshot(): Promise<StatuslineSnapshot | null> {
+  async getStatuslineSnapshot(now: number | Date = Date.now()): Promise<StatuslineSnapshot | null> {
     const candidateDirs: string[] = [];
     if (this.appDataDir) {
       candidateDirs.push(this.appDataDir);
@@ -322,7 +400,8 @@ export class AntigravityService {
         if (fs.existsSync(statuslineFile)) {
           const raw = fs.readFileSync(statuslineFile, 'utf-8');
           if (raw && raw.trim()) {
-            return JSON.parse(raw) as StatuslineSnapshot;
+            const parsed = JSON.parse(raw) as StatuslineSnapshot;
+            return this.normalizeQuotaSnapshot(parsed, now);
           }
         }
       } catch {
