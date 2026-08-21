@@ -7,7 +7,10 @@ import type {
 } from '../types/watch.js';
 import type { BatonRunSnapshot } from '../types/baton.js';
 import { TranscriptTailer } from '../core/transcript-tailer.js';
-import { AntigravityService } from '../services/antigravity-service.js';
+import {
+  AntigravityService,
+  resolveCandidateQuotaInfo,
+} from '../services/antigravity-service.js';
 
 export function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
@@ -354,9 +357,10 @@ export class WatchMonitor {
     const modelName = statusline?.model?.id || 'Gemini 3.7 Flash (High)';
     let quotaInfo = '';
     if (statusline?.quota) {
-      const defaultQuota = Object.values(statusline.quota)[0];
-      if (defaultQuota && typeof defaultQuota.remaining_fraction === 'number') {
-        const pct = Math.round(defaultQuota.remaining_fraction * 100);
+      const activeModelId = statusline.model?.id || modelName;
+      const modelQuota = resolveCandidateQuotaInfo(activeModelId, statusline);
+      if (modelQuota && typeof modelQuota.remaining_fraction === 'number') {
+        const pct = Math.round(modelQuota.remaining_fraction * 100);
         quotaInfo = `  │  ${pc.bold('Quota:')} ${formatProgressBar(pct, 8)}`;
       }
     }

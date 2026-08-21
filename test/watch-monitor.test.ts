@@ -232,4 +232,104 @@ describe('WatchMonitor', () => {
     expect(output).toContain('\x1b[?1049l');
     expect(output).toContain('\x1b[?25h');
   });
+
+  it('should resolve and render quota progress bar for active model rather than picking arbitrary first quota pool', async () => {
+    const snapshot: BatonRunSnapshot = {
+      sessionId: 'test-quota-sess',
+      startTime: new Date(Date.now() - 10000).toISOString(),
+      status: 'running',
+      repo: 'test-owner/test-repo',
+      mode: 'afk',
+      currentIssue: 55,
+      totalIssues: 1,
+      closedCount: 0,
+      blockedCount: 0,
+      processedIssues: [],
+      lastUpdated: new Date().toISOString(),
+    };
+    fs.writeFileSync(runJsonPath, JSON.stringify(snapshot, null, 2), 'utf-8');
+
+    const outputChunks: string[] = [];
+    const mockWriter = (str: string) => outputChunks.push(str);
+
+    const monitor = new WatchMonitor({
+      cwd: tmpDir,
+      stateFilePath: runJsonPath,
+      writer: mockWriter,
+      renderOnce: true,
+      statuslineSnapshot: {
+        model: {
+          id: 'Gemini 3.7 Flash (High)',
+        },
+        quota: {
+          '3p-5h': {
+            remaining_fraction: 0.1,
+            reset_in_seconds: 600,
+          },
+          'gemini-5h': {
+            remaining_fraction: 0.85,
+            reset_in_seconds: 3600,
+          },
+        },
+      },
+    });
+
+    await monitor.render();
+
+    const rendered = outputChunks.join('');
+    expect(rendered).toContain('Gemini 3.7 Flash (High)');
+    expect(rendered).toContain('Quota:');
+    expect(rendered).toContain('85%');
+    expect(rendered).not.toContain('10%');
+  });
+
+  it('should resolve and render candidate quota pools for 3P models in watch monitor', async () => {
+    const snapshot: BatonRunSnapshot = {
+      sessionId: 'test-quota-3p-sess',
+      startTime: new Date(Date.now() - 10000).toISOString(),
+      status: 'running',
+      repo: 'test-owner/test-repo',
+      mode: 'afk',
+      currentIssue: 55,
+      totalIssues: 1,
+      closedCount: 0,
+      blockedCount: 0,
+      processedIssues: [],
+      lastUpdated: new Date().toISOString(),
+    };
+    fs.writeFileSync(runJsonPath, JSON.stringify(snapshot, null, 2), 'utf-8');
+
+    const outputChunks: string[] = [];
+    const mockWriter = (str: string) => outputChunks.push(str);
+
+    const monitor = new WatchMonitor({
+      cwd: tmpDir,
+      stateFilePath: runJsonPath,
+      writer: mockWriter,
+      renderOnce: true,
+      statuslineSnapshot: {
+        model: {
+          id: 'Claude Sonnet 4.6 (Thinking)',
+        },
+        quota: {
+          'gemini-5h': {
+            remaining_fraction: 0.9,
+          },
+          '3p-5h': {
+            remaining_fraction: 0.45,
+            reset_in_seconds: 1800,
+          },
+        },
+      },
+    });
+
+    await monitor.render();
+
+    const rendered = outputChunks.join('');
+    expect(rendered).toContain('Claude Sonnet 4.6 (Thinking)');
+    expect(rendered).toContain('Quota:');
+    expect(rendered).toContain('45%');
+    expect(rendered).not.toContain('90%');
+  });
 });
+
