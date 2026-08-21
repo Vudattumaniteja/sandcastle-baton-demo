@@ -236,6 +236,53 @@ describe('AntigravityService', () => {
       expect(normalizeStatuslineSnapshot(null)).toBeNull();
       expect(normalizeStatuslineSnapshot(undefined)).toBeNull();
     });
+
+    it('should resolve bottleneck quota (lowest remaining fraction) across multi-tier pools for a model', async () => {
+      const { resolveCandidateQuotaInfo } = await import('../src/services/antigravity-service.js');
+      const now = new Date('2026-08-21T12:00:00.000Z');
+      const snapshot: any = {
+        quota: {
+          'gemini-5h': {
+            remaining_fraction: 1.0, // Expired / full 5h pool
+            reset_time: '2026-08-21T11:00:00.000Z',
+            reset_in_seconds: 0,
+          },
+          'gemini-weekly': {
+            remaining_fraction: 0.52, // 52% weekly limit
+            reset_time: '2026-08-25T18:00:00.000Z',
+            reset_in_seconds: 367200,
+          },
+        },
+      };
+
+      const resolved = resolveCandidateQuotaInfo('Gemini 3.7 Flash', snapshot, now);
+      expect(resolved).toBeDefined();
+      expect(resolved?.remaining_fraction).toBe(0.52);
+    });
+
+    it('should prioritize 0% exhausted pool and active countdown over non-zero secondary pools', async () => {
+      const { resolveCandidateQuotaInfo } = await import('../src/services/antigravity-service.js');
+      const now = new Date('2026-08-21T12:00:00.000Z');
+      const snapshot: any = {
+        quota: {
+          'gemini-5h': {
+            remaining_fraction: 0.0, // Hit 5-hour limit
+            reset_time: '2026-08-21T13:30:00.000Z', // Resets in 90m
+            reset_in_seconds: 5400,
+          },
+          'gemini-weekly': {
+            remaining_fraction: 0.85,
+            reset_time: '2026-08-28T00:00:00.000Z',
+            reset_in_seconds: 561600,
+          },
+        },
+      };
+
+      const resolved = resolveCandidateQuotaInfo('Gemini 3.7 Flash', snapshot, now);
+      expect(resolved).toBeDefined();
+      expect(resolved?.remaining_fraction).toBe(0.0);
+      expect(resolved?.reset_in_seconds).toBe(5400);
+    });
   });
 
   describe('Worker Execution Arguments', () => {
