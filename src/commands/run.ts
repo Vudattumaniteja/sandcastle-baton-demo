@@ -294,7 +294,7 @@ export async function runCommand(
     repo: options.repo,
     promptTemplate: options.promptTemplate,
     parentContext: options.parentContext,
-    cwd: options.cwd,
+    cwd: options.cwd ?? process.cwd(),
     githubService,
     gatingEvaluator,
   };

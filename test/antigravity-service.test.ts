@@ -322,6 +322,33 @@ describe('AntigravityService', () => {
       const promptIdx = args.indexOf('--prompt');
       expect(args[promptIdx + 1]).toBe('Custom worker prompt for issue 42');
     });
+
+    it('should append --add-dir <cwd> when cwd is present in AntigravityWorkerOptions', () => {
+      const service = new AntigravityService();
+      const options: AntigravityWorkerOptions = {
+        repo: 'owner/repo',
+        issueNumber: 42,
+        cwd: '/path/to/target/project',
+      };
+
+      const args = service.buildWorkerArgs(options);
+
+      expect(args).toContain('--add-dir');
+      const addDirIdx = args.indexOf('--add-dir');
+      expect(args[addDirIdx + 1]).toBe('/path/to/target/project');
+    });
+
+    it('should not append --add-dir when cwd is not provided', () => {
+      const service = new AntigravityService();
+      const options: AntigravityWorkerOptions = {
+        repo: 'owner/repo',
+        issueNumber: 42,
+      };
+
+      const args = service.buildWorkerArgs(options);
+
+      expect(args).not.toContain('--add-dir');
+    });
   });
 
   describe('Process Execution with Environment & ANSI Color', () => {

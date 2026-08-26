@@ -64,11 +64,13 @@ export class BatonRunner extends EventEmitter {
   private promptTemplateEngine: PromptTemplateEngine;
   private configService: ConfigService;
   private stateFilePath: string;
+  private cwd: string;
 
   constructor(options: BatonRunnerOptions = {}) {
     super();
     this.options = options;
-    const cwd = options.cwd ?? process.cwd();
+    this.cwd = options.cwd ?? process.cwd();
+    const cwd = this.cwd;
     this.configService = options.configService ?? new ConfigService({ cwd });
     this.promptTemplateEngine =
       options.promptTemplateEngine ?? new PromptTemplateEngine({ cwd });
@@ -478,7 +480,7 @@ export class BatonRunner extends EventEmitter {
           reasoningEffort:
             this.options.reasoningEffort ?? config.reasoningEffort,
           timeout: this.options.timeout ?? config.timeout,
-          cwd: this.options.cwd,
+          cwd: this.cwd,
         },
         this.options.signal
       );

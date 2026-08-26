@@ -908,6 +908,122 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       expect(generatedPrompt).toContain('ParentNum: \n');
       expect(generatedPrompt).toContain('ParentTitle: ');
     });
+
+    it('should forward explicit cwd to processSupervisor.execute', async () => {
+      const mockIssue: GitHubIssue = {
+        number: 50,
+        title: 'CWD Forwarding Test',
+        body: 'Testing cwd forwarding',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+        url: 'https://github.com/owner/repo/issues/50',
+      };
+
+      const mockGitHubService = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn().mockResolvedValue(mockIssue),
+        closeIssue: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const mockGatingEvaluator = {
+        evaluateIssue: vi.fn().mockResolvedValue({
+          issueNumber: 50,
+          title: 'CWD Forwarding Test',
+          state: 'OPEN',
+          status: 'READY',
+          isReady: true,
+          reasons: ['Ready'],
+        }),
+      };
+
+      const mockProcessSupervisor = {
+        execute: vi.fn().mockResolvedValue({
+          success: true,
+          status: 'completed',
+          attempts: 1,
+          totalDurationMs: 500,
+        }),
+      };
+
+      const targetCwd = path.join(tempDir, 'custom-project-root');
+      const runner = new BatonRunner({
+        repo: 'owner/repo',
+        issues: [50],
+        cwd: targetCwd,
+        githubService: mockGitHubService as any,
+        gatingEvaluator: mockGatingEvaluator as any,
+        processSupervisor: mockProcessSupervisor as any,
+        stateFilePath,
+        mode: 'afk',
+      });
+
+      const result = await runner.run();
+
+      expect(result.success).toBe(true);
+      expect(mockProcessSupervisor.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: targetCwd,
+        }),
+        undefined
+      );
+    });
+
+    it('should forward default process.cwd() to processSupervisor.execute when cwd option is omitted', async () => {
+      const mockIssue: GitHubIssue = {
+        number: 51,
+        title: 'Default CWD Forwarding Test',
+        body: 'Testing default cwd forwarding',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+        url: 'https://github.com/owner/repo/issues/51',
+      };
+
+      const mockGitHubService = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn().mockResolvedValue(mockIssue),
+        closeIssue: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const mockGatingEvaluator = {
+        evaluateIssue: vi.fn().mockResolvedValue({
+          issueNumber: 51,
+          title: 'Default CWD Forwarding Test',
+          state: 'OPEN',
+          status: 'READY',
+          isReady: true,
+          reasons: ['Ready'],
+        }),
+      };
+
+      const mockProcessSupervisor = {
+        execute: vi.fn().mockResolvedValue({
+          success: true,
+          status: 'completed',
+          attempts: 1,
+          totalDurationMs: 500,
+        }),
+      };
+
+      const runner = new BatonRunner({
+        repo: 'owner/repo',
+        issues: [51],
+        githubService: mockGitHubService as any,
+        gatingEvaluator: mockGatingEvaluator as any,
+        processSupervisor: mockProcessSupervisor as any,
+        stateFilePath,
+        mode: 'afk',
+      });
+
+      const result = await runner.run();
+
+      expect(result.success).toBe(true);
+      expect(mockProcessSupervisor.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: process.cwd(),
+        }),
+        undefined
+      );
+    });
   });
 });
 
