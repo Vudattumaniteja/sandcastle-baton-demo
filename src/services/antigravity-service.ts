@@ -556,6 +556,10 @@ export class AntigravityService {
     const prompt = options.prompt ?? this.buildWorkerPrompt(options.repo, options.issueNumber);
     args.push('--prompt', prompt);
 
+    if (options.cwd) {
+      args.push('--add-dir', options.cwd);
+    }
+
     if (options.additionalArgs && options.additionalArgs.length > 0) {
       args.push(...options.additionalArgs);
     }

@@ -75,6 +75,11 @@ program
     '-y, --yes',
     'Automatically confirm prompts (e.g. expand children)'
   )
+  .option(
+    '--cwd <path>',
+    'Working directory for worker execution and repository context',
+    process.cwd()
+  )
   .option('--json', 'Output structured JSON format')
   .option('--quiet', 'Suppress non-essential progress output')
   .action(async (target, options) => {

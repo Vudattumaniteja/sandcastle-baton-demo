@@ -306,6 +306,57 @@ describe('POSIX Headless Commands (doctor, status, config, run)', () => {
       );
     });
 
+    it('should forward explicit --cwd <path> option to runner', async () => {
+      const mockRunner = {
+        run: vi.fn().mockResolvedValue({
+          success: true,
+          totalProcessed: 1,
+          closedIssues: [25],
+          blockedIssues: [],
+          durationMs: 1000,
+        }),
+        on: vi.fn(),
+      };
+
+      const runnerFactory = vi.fn().mockReturnValue(mockRunner);
+
+      await runCommand('25', {
+        cwd: '/explicit/target/path',
+        json: true,
+      }, runnerFactory);
+
+      expect(runnerFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: '/explicit/target/path',
+        })
+      );
+    });
+
+    it('should default cwd to process.cwd() when cwd option is omitted', async () => {
+      const mockRunner = {
+        run: vi.fn().mockResolvedValue({
+          success: true,
+          totalProcessed: 1,
+          closedIssues: [25],
+          blockedIssues: [],
+          durationMs: 1000,
+        }),
+        on: vi.fn(),
+      };
+
+      const runnerFactory = vi.fn().mockReturnValue(mockRunner);
+
+      await runCommand('25', {
+        json: true,
+      }, runnerFactory);
+
+      expect(runnerFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: process.cwd(),
+        })
+      );
+    });
+
     it('should validate mutually exclusive options and fail fast with exit code 1', async () => {
       // 1. positional target + --only
       await runCommand('42', { only: '45' });
