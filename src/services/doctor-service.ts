@@ -131,6 +131,32 @@ export class DoctorService {
         : `Create the missing domain documentation files: ${missingFiles.join(', ')}.`,
     });
 
+    // 6. Windows PowerShell Alias Conflict Check (sc -> Set-Content)
+    if (process.platform === 'win32') {
+      try {
+        const psCheck = await this.executor('powershell', [
+          '-NoProfile',
+          '-Command',
+          '(Get-Command sc -ErrorAction SilentlyContinue).CommandType',
+        ]);
+        const isAliased = psCheck.stdout.trim().toLowerCase() === 'alias';
+        checks.push({
+          id: 'ps-sc-alias',
+          name: 'PowerShell "sc" Alias Conflict',
+          passed: !isAliased,
+          message: isAliased
+            ? 'PowerShell built-in alias `sc` points to `Set-Content`, shadowing Sandcastle CLI shorthand.'
+            : 'No conflicting `sc` alias in PowerShell.',
+          fatal: false,
+          remediation: isAliased
+            ? 'Run `Remove-Alias -Name sc -Force -ErrorAction SilentlyContinue` in your PowerShell profile, or invoke full `sandcastle` binary.'
+            : undefined,
+        });
+      } catch {
+        // Non-fatal if PowerShell command execution fails
+      }
+    }
+
     const healthy = checks.every((c) => (c.fatal ? c.passed : true));
 
     return {

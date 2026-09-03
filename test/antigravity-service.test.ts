@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { AntigravityService } from '../src/services/antigravity-service.js';
+import { AntigravityService, resolveAgyModel } from '../src/services/antigravity-service.js';
 import type { AntigravityWorkerOptions } from '../src/types/antigravity.js';
 import fs from 'fs';
 import path from 'path';
@@ -33,12 +33,90 @@ describe('AntigravityService', () => {
       expect(mockExecutor).toHaveBeenCalledWith('agy', ['models'], expect.any(Object));
     });
 
+    it('should parse tab-separated agy models CLI output with Gemini 3.8 Flash as default', async () => {
+      const mockOutput = `Fetching available models...
+gemini-3.8-flash-high\tGemini 3.8 Flash (High)
+gemini-3.8-flash-medium\tGemini 3.8 Flash (Medium)
+gemini-3.8-flash-low\tGemini 3.8 Flash (Low)
+gemini-3.7-flash-high\tGemini 3.7 Flash (High)
+gemini-3.7-flash-medium\tGemini 3.7 Flash (Medium)
+gemini-3.7-flash-low\tGemini 3.7 Flash (Low)
+gemini-3.6-flash-high\tGemini 3.6 Flash (High)
+gemini-3.1-pro-high\tGemini 3.1 Pro (High)
+claude-sonnet-4-6\tClaude Sonnet 4.6 (Thinking)
+claude-opus-4-6-thinking\tClaude Opus 4.6 (Thinking)
+gpt-oss-120b-medium\tGPT-OSS 120B (Medium)
+`;
+      const mockExecutor = vi.fn().mockResolvedValue({
+        stdout: mockOutput,
+        stderr: '',
+        exitCode: 0,
+      });
+
+      const service = new AntigravityService({ executor: mockExecutor });
+      const models = await service.discoverModels();
+
+      expect(models).toHaveLength(11);
+      expect(models[0]).toEqual({
+        id: 'gemini-3.8-flash-high',
+        name: 'Gemini 3.8 Flash (High)',
+        isDefault: true,
+      });
+      expect(models[1]).toEqual({
+        id: 'gemini-3.8-flash-medium',
+        name: 'Gemini 3.8 Flash (Medium)',
+        isDefault: false,
+      });
+      expect(models[3]).toEqual({
+        id: 'gemini-3.7-flash-high',
+        name: 'Gemini 3.7 Flash (High)',
+        isDefault: false,
+      });
+      expect(models[8]).toEqual({
+        id: 'claude-sonnet-4-6',
+        name: 'Claude Sonnet 4.6 (Thinking)',
+        isDefault: false,
+      });
+    });
+
+    it('should parse space-separated agy models output correctly', () => {
+      const service = new AntigravityService();
+      const mockOutput = `Fetching available models...
+gemini-3.8-flash-high   Gemini 3.8 Flash (High)
+gemini-3.8-flash-low    Gemini 3.8 Flash (Low)
+`;
+      const models = service.parseModelsOutput(mockOutput);
+      expect(models).toHaveLength(2);
+      expect(models[0]).toEqual({
+        id: 'gemini-3.8-flash-high',
+        name: 'Gemini 3.8 Flash (High)',
+        isDefault: true,
+      });
+      expect(models[1]).toEqual({
+        id: 'gemini-3.8-flash-low',
+        name: 'Gemini 3.8 Flash (Low)',
+        isDefault: false,
+      });
+    });
+
+    it('should respect Default model: line when present in agy models output', () => {
+      const service = new AntigravityService();
+      const mockOutput = `Default model: gemini-3.8-flash-medium
+gemini-3.8-flash-high\tGemini 3.8 Flash (High)
+gemini-3.8-flash-medium\tGemini 3.8 Flash (Medium)
+`;
+      const models = service.parseModelsOutput(mockOutput);
+      expect(models[0].isDefault).toBe(false);
+      expect(models[1].isDefault).toBe(true);
+    });
+
     it('should fallback to default models if agy models command fails', async () => {
       const mockExecutor = vi.fn().mockRejectedValue(new Error('Command failed'));
       const service = new AntigravityService({ executor: mockExecutor });
       const models = await service.discoverModels();
 
       expect(models.length).toBeGreaterThan(0);
+      expect(models.some((m) => m.id === 'Gemini 3.8 Flash')).toBe(true);
       expect(models.some((m) => m.id === 'Gemini 3.7 Flash')).toBe(true);
     });
 
@@ -59,7 +137,7 @@ describe('AntigravityService', () => {
       const models = await service.discoverModels(50); // 50ms timeout
 
       expect(models.length).toBeGreaterThan(0);
-      expect(models[0].id).toBe('Gemini 3.7 Flash');
+      expect(models[0].id).toBe('Gemini 3.8 Flash');
     });
 
     it('should read statusline snapshot and normalize active quota from last_statusline_input.json', async () => {

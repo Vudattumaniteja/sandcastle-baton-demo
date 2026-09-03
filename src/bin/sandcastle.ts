@@ -9,6 +9,7 @@ import {
   configSetCommand,
   configListCommand,
 } from '../commands/config.js';
+import { updateCommand } from '../commands/update.js';
 
 const program = new Command();
 
@@ -60,7 +61,9 @@ program
   .option('-t, --timeout <duration>', 'Timeout per issue (e.g. 30m)')
   .option('--retries <N>', 'Max retry attempts per issue', '2')
   .option('--auto-pr', 'Automatically create Pull Request upon verified tests', true)
+  .option('--no-auto-pr', 'Do not create Pull Request upon verified tests')
   .option('--auto-merge', 'Automatically merge Pull Request upon creation', true)
+  .option('--no-auto-merge', 'Do not merge Pull Request upon creation')
   .option('--prompt-template <path>', 'Path to custom markdown prompt template')
   .option(
     '--parent-context <mode>',
@@ -107,7 +110,10 @@ program
 // 4. config command
 const configCmd = program
   .command('config')
-  .description('Manage Sandcastle 3-tier configuration');
+  .description('Manage Sandcastle 3-tier configuration')
+  .action((options) => {
+    configListCommand(options);
+  });
 
 configCmd
   .command('get <key>')
@@ -145,6 +151,26 @@ program
   .option('--json', 'Output live monitoring snapshot in JSON format')
   .action(async (options) => {
     await watchCommand(options);
+  });
+
+// 6. update command
+program
+  .command('update')
+  .alias('upgrade')
+  .description(
+    'Update Sandcastle codebase, dependencies, build, and GitHub Actions CI workflow'
+  )
+  .option('--check', 'Check for updates without applying')
+  .option('--ci', 'Ensure or update GitHub Actions CI workflow')
+  .option('--force', 'Force reinstall and rebuild even if up to date')
+  .option('--json', 'Output structured JSON format')
+  .option(
+    '--cwd <path>',
+    'Working directory for update check and execution',
+    process.cwd()
+  )
+  .action(async (options) => {
+    await updateCommand(options);
   });
 
 // If no arguments provided in process.argv, check if interactive terminal (TTY)

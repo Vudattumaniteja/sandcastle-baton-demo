@@ -82,4 +82,30 @@ describe('DoctorService (Health & Environment Validation)', () => {
     expect(assetCheck?.message).toContain('SKILL.md');
     expect(assetCheck?.remediation).toBeDefined();
   });
+
+  it('should detect PowerShell sc alias conflict on Windows with remediation', async () => {
+    fs.writeFileSync(path.join(tempDir, 'SKILL.md'), '# Skill');
+    fs.writeFileSync(path.join(tempDir, 'CONTEXT.md'), '# Context');
+    fs.writeFileSync(path.join(tempDir, 'AGENTS.md'), '# Agents');
+
+    const mockExecutor = vi.fn(async (file: string, args: string[]) => {
+      if (file === 'powershell') {
+        return { stdout: 'Alias\r\n', stderr: '', exitCode: 0 };
+      }
+      return { stdout: 'ok', stderr: '', exitCode: 0 };
+    });
+
+    const doctorService = new DoctorService({
+      cwd: tempDir,
+      commandExecutor: mockExecutor,
+    });
+
+    const report = await doctorService.runDiagnostics();
+    if (process.platform === 'win32') {
+      const aliasCheck = report.checks.find((c) => c.id === 'ps-sc-alias');
+      expect(aliasCheck).toBeDefined();
+      expect(aliasCheck?.passed).toBe(false);
+      expect(aliasCheck?.remediation).toContain('Remove-Alias');
+    }
+  });
 });

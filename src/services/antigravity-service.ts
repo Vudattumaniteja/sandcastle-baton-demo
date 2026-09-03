@@ -42,10 +42,16 @@ export const defaultAgyExecutor: AgyCommandExecutor = async (file, args, options
 
 export const FALLBACK_MODELS: ModelInfo[] = [
   {
+    id: 'Gemini 3.8 Flash',
+    name: 'Gemini 3.8 Flash',
+    aliases: ['3.8-flash', 'gemini-3.8-flash'],
+    isDefault: true,
+  },
+  {
     id: 'Gemini 3.7 Flash',
     name: 'Gemini 3.7 Flash',
-    aliases: ['3.7-flash', 'flash', 'gemini-3.7-flash', 'default'],
-    isDefault: true,
+    aliases: ['3.7-flash', 'flash', 'gemini-3.7-flash'],
+    isDefault: false,
   },
   {
     id: 'Gemini 3.1 Pro',
@@ -90,9 +96,9 @@ export const FALLBACK_MODELS: ModelInfo[] = [
  */
 export function resolveAgyModel(modelName?: string, effort?: string): string {
   if (!modelName) {
-    if (effort === 'medium') return 'Gemini 3.7 Flash (Medium)';
-    if (effort === 'low') return 'Gemini 3.7 Flash (Low)';
-    return 'Gemini 3.7 Flash (High)';
+    if (effort === 'medium') return 'Gemini 3.8 Flash (Medium)';
+    if (effort === 'low') return 'Gemini 3.8 Flash (Low)';
+    return 'Gemini 3.8 Flash (High)';
   }
 
   const trimmed = modelName.trim();
@@ -101,7 +107,8 @@ export function resolveAgyModel(modelName?: string, effort?: string): string {
   if (/\([^)]+\)$/.test(trimmed)) {
     if (
       effort &&
-      (trimmed.startsWith('Gemini 3.7 Flash') ||
+      (trimmed.startsWith('Gemini 3.8 Flash') ||
+        trimmed.startsWith('Gemini 3.7 Flash') ||
         trimmed.startsWith('Gemini 3.6 Flash') ||
         trimmed.startsWith('Gemini 3.5 Flash'))
     ) {
@@ -120,10 +127,19 @@ export function resolveAgyModel(modelName?: string, effort?: string): string {
   const lower = trimmed.toLowerCase();
 
   if (
+    (lower.includes('3.8') && lower.includes('flash')) ||
+    lower === '3.8-flash' ||
+    lower === 'gemini-3.8-flash' ||
+    lower === 'default'
+  ) {
+    const eff =
+      effort === 'low' ? 'Low' : effort === 'medium' ? 'Medium' : 'High';
+    return `Gemini 3.8 Flash (${eff})`;
+  }
+  if (
     (lower.includes('3.7') && lower.includes('flash')) ||
     lower === 'flash' ||
-    lower === 'gemini-3.7-flash' ||
-    lower === 'default'
+    lower === 'gemini-3.7-flash'
   ) {
     const eff =
       effort === 'low' ? 'Low' : effort === 'medium' ? 'Medium' : 'High';
@@ -433,7 +449,7 @@ export class AntigravityService {
 
     // Search for default model indicator
     for (const line of lines) {
-      const defaultMatch = line.match(/Default\s+model:\s*([^\s]+)/i);
+      const defaultMatch = line.match(/Default\s+model:\s*(.+)$/i);
       if (defaultMatch && defaultMatch[1]) {
         defaultModelId = defaultMatch[1].trim();
       }
@@ -444,6 +460,14 @@ export class AntigravityService {
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
+
+      if (trimmed.toLowerCase().startsWith('default model:')) {
+        continue;
+      }
+
+      if (trimmed.toLowerCase().startsWith('fetching')) {
+        continue;
+      }
 
       if (trimmed.toLowerCase().startsWith('available models:')) {
         inAvailableBlock = true;
@@ -464,17 +488,79 @@ export class AntigravityService {
             id,
             name: id,
             aliases: aliases.length > 0 ? aliases : undefined,
-            isDefault: defaultModelId ? id === defaultModelId : id === 'Gemini 3.7 Flash (High)',
           });
         }
-      } else if (inAvailableBlock && (trimmed.startsWith('Gemini') || trimmed.startsWith('Claude') || trimmed.startsWith('GPT'))) {
-        // Format 2: Indented model names from agy
+        continue;
+      }
+
+      // Format 2: Tab-separated or space-separated <id>\t<name> or <id>  <name>
+      let colMatch: RegExpMatchArray | null = null;
+      if (trimmed.includes('\t')) {
+        colMatch = trimmed.match(/^([^\t]+)\t+(.+)$/);
+      } else {
+        colMatch = trimmed.match(/^([^\s]+)\s{2,}(.+)$/);
+      }
+
+      if (colMatch && colMatch[1] && colMatch[2]) {
+        const id = colMatch[1].trim();
+        const name = colMatch[2].trim();
+        models.push({
+          id,
+          name,
+        });
+        continue;
+      }
+
+      // Format 3: Indented model names from agy
+      if (inAvailableBlock && (trimmed.startsWith('Gemini') || trimmed.startsWith('Claude') || trimmed.startsWith('GPT'))) {
         const id = trimmed;
         models.push({
           id,
           name: id,
-          isDefault: id === 'Gemini 3.7 Flash (High)',
         });
+        continue;
+      }
+    }
+
+    // Determine default model: Default model line -> Gemini 3.8 Flash (High) -> Gemini 3.7 Flash (High)
+    let defaultTarget = defaultModelId;
+    if (!defaultTarget) {
+      if (
+        models.some(
+          (m) =>
+            m.name === 'Gemini 3.8 Flash (High)' ||
+            m.id === 'gemini-3.8-flash-high' ||
+            m.id === 'Gemini 3.8 Flash (High)'
+        )
+      ) {
+        defaultTarget = 'Gemini 3.8 Flash (High)';
+      } else if (
+        models.some(
+          (m) =>
+            m.name === 'Gemini 3.7 Flash (High)' ||
+            m.id === 'gemini-3.7-flash-high' ||
+            m.id === 'Gemini 3.7 Flash (High)'
+        )
+      ) {
+        defaultTarget = 'Gemini 3.7 Flash (High)';
+      }
+    }
+
+    if (defaultTarget) {
+      for (const m of models) {
+        const isMatch =
+          m.id === defaultTarget ||
+          m.name === defaultTarget ||
+          (defaultTarget === 'Gemini 3.8 Flash (High)' &&
+            (m.id === 'gemini-3.8-flash-high' || m.name === 'Gemini 3.8 Flash (High)')) ||
+          (defaultTarget === 'Gemini 3.7 Flash (High)' &&
+            (m.id === 'gemini-3.7-flash-high' || m.name === 'Gemini 3.7 Flash (High)'));
+
+        m.isDefault = Boolean(isMatch);
+      }
+    } else {
+      for (const m of models) {
+        m.isDefault = false;
       }
     }
 
