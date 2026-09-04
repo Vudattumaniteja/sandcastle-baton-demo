@@ -76,7 +76,7 @@ sandcastle run <number>
 # Or run an isolated single issue
 sandcastle run --only <number>
 ```
-Legacy PowerShell fallback: `.\sandcastle.ps1 -Repo "<owner>/<repo>" -StartIssue <number>`.
+
 
 ---
 

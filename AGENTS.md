@@ -27,7 +27,7 @@ When assigned an issue, subagents must follow the authoritative 7-phase contract
 
 ## Coding and Tooling Standards
 
-- **Core CLI**: Cross-platform TypeScript CLI (`sandcastle` / `sc`). `sandcastle.ps1` is legacy fallback.
+- **Core CLI**: Cross-platform TypeScript CLI (`sandcastle` / `sc`).
 - **Agent Interop**: Google Antigravity (`agy`) CLI sub-processes with model resolution and quota tracking.
 - **Git & GitHub Operations**: Use official `gh` CLI commands (`gh issue`, `gh pr`).
 - **Safety First**: Never bypass permissions or run destructive git operations unless running in authorized AFK worker mode.
