@@ -31,3 +31,12 @@ When assigned an issue, subagents must follow the authoritative 7-phase contract
 - **Agent Interop**: Google Antigravity (`agy`) CLI sub-processes with model resolution and quota tracking.
 - **Git & GitHub Operations**: Use official `gh` CLI commands (`gh issue`, `gh pr`).
 - **Safety First**: Never bypass permissions or run destructive git operations unless running in authorized AFK worker mode.
+
+---
+
+## Engineering Disciplines & Guardrails
+
+- **Proactive Dead Code Removal**: When replacing or superseding a tool, script, or workflow, delete the legacy files and remove their references completely. Never leave dead files behind as "fallbacks".
+- **Isolated Unit Tests**: All unit tests in `test/` must execute in memory with mocked dependencies (`GitHubService`, `AntigravityService`, child processes). Never make live network or unmocked CLI calls in unit tests to ensure fast, deterministic CI.
+- **Verification Lever**: Before opening a PR or declaring a task complete, run the project verification smoke test (`npm run build && node scripts/verify-build.mjs && node dist/bin/sandcastle.js doctor --json`).
+- **Bounded Retries**: Never write unbounded retry or polling loops. Always enforce a hard ceiling on failure retries and rate-limit pauses.
