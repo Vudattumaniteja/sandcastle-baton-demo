@@ -1,11 +1,42 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execa } from 'execa';
 import pc from 'picocolors';
 import type { CommandExecutor } from '../types/github.js';
 import type { UpdateCommandOptions, UpdateResult } from '../types/update.js';
 
 export * from '../types/update.js';
+
+/**
+ * Resolves the root directory of the Sandcastle repository/package from disk.
+ */
+export function resolveSandcastlePackageRoot(fromUrl?: string): string {
+  try {
+    let currentDir = path.dirname(fileURLToPath(fromUrl || import.meta.url));
+    if (fs.existsSync(currentDir)) {
+      currentDir = fs.realpathSync(currentDir);
+    }
+    let dir = currentDir;
+    while (dir && dir !== path.dirname(dir)) {
+      const pkgPath = path.join(dir, 'package.json');
+      if (fs.existsSync(pkgPath)) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          if (pkg.name === 'sandcastle') {
+            return dir;
+          }
+        } catch {
+          // ignore
+        }
+      }
+      dir = path.dirname(dir);
+    }
+  } catch {
+    // ignore
+  }
+  return '';
+}
 
 export const CI_WORKFLOW_CONTENT = `name: CI
 
@@ -74,10 +105,42 @@ export const defaultUpdateExecutor: CommandExecutor = async (file, args, options
 export async function updateCommand(
   options: UpdateCommandOptions = {}
 ): Promise<UpdateResult> {
-  const cwd = options.cwd ?? process.cwd();
   const executor = options.executor ?? options.commandExecutor ?? defaultUpdateExecutor;
+
+  // Resolve target working directory
+  let cwd = options.cwd;
+  if (!cwd) {
+    const curGitCheck = await executor('git', ['rev-parse', '--is-inside-work-tree'], {
+      cwd: process.cwd(),
+    });
+    const curIsGit =
+      curGitCheck.exitCode === 0 && curGitCheck.stdout.trim().toLowerCase() === 'true';
+
+    if (curIsGit) {
+      cwd = process.cwd();
+    } else {
+      const sandcastleRoot = resolveSandcastlePackageRoot();
+      if (sandcastleRoot) {
+        const rootGitCheck = await executor('git', ['rev-parse', '--is-inside-work-tree'], {
+          cwd: sandcastleRoot,
+        });
+        if (
+          rootGitCheck.exitCode === 0 &&
+          rootGitCheck.stdout.trim().toLowerCase() === 'true'
+        ) {
+          cwd = sandcastleRoot;
+        }
+      }
+    }
+  }
+  cwd = cwd ?? process.cwd();
+
   const ciPath = path.join(cwd, '.github', 'workflows', 'ci.yml');
   const workflowMissing = !fs.existsSync(ciPath);
+
+  if (options.cwd === undefined && cwd !== process.cwd() && !options.json) {
+    console.log(pc.cyan(`→ Targeting Sandcastle installation at ${cwd}`));
+  }
 
   try {
     // 1. Detect if running inside a Git clone
@@ -163,7 +226,16 @@ export async function updateCommand(
       return result;
     }
     const latestVersion = originRes.stdout.trim();
-    const isBehind = currentVersion !== latestVersion;
+    let isBehind = currentVersion !== latestVersion;
+    if (isBehind) {
+      const revListRes = await executor('git', ['rev-list', 'HEAD..origin/main', '--count'], { cwd });
+      if (revListRes.exitCode === 0) {
+        const count = parseInt(revListRes.stdout.trim(), 10);
+        if (!isNaN(count) && count === 0) {
+          isBehind = false;
+        }
+      }
+    }
 
     // 5. Check mode: report status without applying updates or modifying files
     if (options.check) {
@@ -194,6 +266,9 @@ export async function updateCommand(
     // 6. Pull changes and rebuild if behind or forced
     let updated = false;
     if (isBehind || options.force) {
+      if (!options.json) {
+        console.log(pc.cyan('→ Pulling latest updates from remote...'));
+      }
       // Step A: pull changes
       const pullRes = await executor('git', ['pull', 'origin', 'main'], { cwd });
       if (pullRes.exitCode !== 0) {
@@ -213,6 +288,9 @@ export async function updateCommand(
         return result;
       }
 
+      if (!options.json) {
+        console.log(pc.cyan('→ Installing dependencies...'));
+      }
       // Step B: npm install
       const installRes = await executor('npm', ['install'], { cwd });
       if (installRes.exitCode !== 0) {
@@ -222,7 +300,7 @@ export async function updateCommand(
           currentVersion,
           latestVersion,
           ciUpdated: false,
-          message: `Failed to install dependencies: ${installRes.stderr.trim() || installRes.stdout.trim() || 'npm install failed'}`,
+          message: `Failed to install dependencies: ${installRes.stderr.trim() || 'npm install failed'}`,
         };
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));
@@ -232,6 +310,9 @@ export async function updateCommand(
         return result;
       }
 
+      if (!options.json) {
+        console.log(pc.cyan('→ Rebuilding Sandcastle binary...'));
+      }
       // Step C: npm run build
       const buildRes = await executor('npm', ['run', 'build'], { cwd });
       if (buildRes.exitCode !== 0) {
@@ -241,7 +322,7 @@ export async function updateCommand(
           currentVersion,
           latestVersion,
           ciUpdated: false,
-          message: `Failed to build project: ${buildRes.stderr.trim() || buildRes.stdout.trim() || 'npm run build failed'}`,
+          message: `Failed to build project: ${buildRes.stderr.trim() || 'npm run build failed'}`,
         };
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));
@@ -249,6 +330,10 @@ export async function updateCommand(
           console.error(pc.red(`✖ ${result.message}`));
         }
         return result;
+      }
+
+      if (!options.json) {
+        console.log(pc.cyan('→ Verifying build...'));
       }
 
       // Step D: npm run build:verify

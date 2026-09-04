@@ -156,7 +156,6 @@ program
 // 6. update command
 program
   .command('update')
-  .alias('upgrade')
   .description(
     'Update Sandcastle codebase, dependencies, build, and GitHub Actions CI workflow'
   )
@@ -166,8 +165,22 @@ program
   .option('--json', 'Output structured JSON format')
   .option(
     '--cwd <path>',
-    'Working directory for update check and execution',
-    process.cwd()
+    'Working directory for update check and execution'
+  )
+  .action(async (options) => {
+    await updateCommand(options);
+  });
+
+program
+  .command('upgrade', { hidden: true })
+  .description('Update Sandcastle codebase (alias for update)')
+  .option('--check', 'Check for updates without applying')
+  .option('--ci', 'Ensure or update GitHub Actions CI workflow')
+  .option('--force', 'Force reinstall and rebuild even if up to date')
+  .option('--json', 'Output structured JSON format')
+  .option(
+    '--cwd <path>',
+    'Working directory for update check and execution'
   )
   .action(async (options) => {
     await updateCommand(options);
