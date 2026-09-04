@@ -6,6 +6,7 @@ import { doctorCommand } from '../src/commands/doctor.js';
 import { statusCommand } from '../src/commands/status.js';
 import { configGetCommand, configSetCommand, configListCommand } from '../src/commands/config.js';
 import { runCommand } from '../src/commands/run.js';
+import { GitHubService } from '../src/services/github-service.js';
 import type { BatonRunSnapshot } from '../src/types/baton.js';
 
 describe('POSIX Headless Commands (doctor, status, config, run)', () => {
@@ -16,6 +17,8 @@ describe('POSIX Headless Commands (doctor, status, config, run)', () => {
   let consoleLogSpy: any;
   let consoleErrorSpy: any;
   let processExitSpy: any;
+  let getRepoSpy: any;
+  let getIssueSpy: any;
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sandcastle-cmd-test-'));
@@ -26,12 +29,16 @@ describe('POSIX Headless Commands (doctor, status, config, run)', () => {
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     processExitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+    getRepoSpy = vi.spyOn(GitHubService.prototype, 'getRepo').mockResolvedValue('owner/repo');
+    getIssueSpy = vi.spyOn(GitHubService.prototype, 'getIssue').mockResolvedValue(null);
   });
 
   afterEach(() => {
     consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
     processExitSpy.mockRestore();
+    getRepoSpy?.mockRestore();
+    getIssueSpy?.mockRestore();
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
