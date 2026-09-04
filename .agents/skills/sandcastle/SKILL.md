@@ -64,11 +64,19 @@ When invoked inside an active Antigravity session (CLI, IDE, or App), the parent
    - If closed successfully: increment issue number (`N = N + 1`), find the next open gated issue, and spawn a **brand new subagent** for issue `#(N+1)`.
    - If blocked: report the blocker summary to the user and stop the baton.
 
-### Mode B: Standalone CLI Runner (`sandcastle.ps1`)
-When running headlessly from terminal, use the provided `sandcastle.ps1` runner script which executes each issue in a distinct `agy` CLI process:
-```powershell
-.\sandcastle.ps1 -Repo "<owner>/<repo>" -StartIssue <number>
+### Mode B: Standalone CLI Runner (`sandcastle` / `sc`)
+When running headlessly or sequentially from the terminal, use the global TypeScript CLI runner:
+```bash
+# Run all ready issues in backlog order
+sandcastle run --all
+
+# Or resume sequentially from a specific issue onward
+sandcastle run <number>
+
+# Or run an isolated single issue
+sandcastle run --only <number>
 ```
+Legacy PowerShell fallback: `.\sandcastle.ps1 -Repo "<owner>/<repo>" -StartIssue <number>`.
 
 ---
 

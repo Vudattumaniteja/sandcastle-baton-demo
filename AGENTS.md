@@ -2,44 +2,32 @@
 
 Sandcastle is an autonomous, sequential GitHub issue baton orchestrator for AI coding agents.
 
-## Agent skills
+## Core Documentation
 
-### Worker contract & execution lifecycle
+- **System Architecture**: System overview, 7-phase worker contract, gating engine, supervisor, and Antigravity interop. See [`docs/architecture.md`](docs/architecture.md).
+- **User & CLI Guide**: Installation, interactive wizard, command reference, flags, and configuration. See [`docs/user-guide.md`](docs/user-guide.md).
+- **Domain Context & Glossary**: Single-context domain layout, modules, and terminology. See [`CONTEXT.md`](CONTEXT.md).
+- **Architectural Decision Records**: Key design history. See [`docs/adr/`](docs/adr/).
 
-Authoritative 7-phase lifecycle (Inspect -> Implement -> Verify -> Commit -> PR -> Merge -> Close) and blocker protocol. See [`docs/agents/worker-contract.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/worker-contract.md).
+---
 
-### Antigravity interop & model resolution
+## The 7-Phase Worker Contract
 
-Google Antigravity (`agy`) CLI sub-processes, in-session subagents, model resolution, and quota tracking. See [`docs/agents/antigravity-interop.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/antigravity-interop.md).
+When assigned an issue, subagents must follow the authoritative 7-phase contract:
 
-### Issue tracker
-
-Issues and backlog tickets are tracked in GitHub Issues via `gh` CLI. See [`docs/agents/issue-tracker.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/issue-tracker.md).
-
-### Issue authoring & baton workflow
-
-Author atomic issues, configure checkable acceptance criteria, and manage gating labels. See [`docs/agents/issue-authoring.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/issue-authoring.md).
-
-### Triage labels
-
-Standard five canonical triage roles plus Sandcastle baton gates (`ready-for-agent`, `AFK`, `status blocked`, `sandcastle`). See [`docs/agents/triage-labels.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/triage-labels.md).
-
-### User & operator documentation
-
-- [Getting Started Guide](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/getting-started.md)
-- [Interactive Wizard Guide](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/interactive-wizard.md)
-- [CLI Reference Manual](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/cli-reference.md)
-- [Configuration Guide](file:///C:/Users/Manit/Desktop/sandcastle/docs/user/configuration.md)
-
-### Domain docs
-
-Single-context layout ([`CONTEXT.md`](file:///C:/Users/Manit/Desktop/sandcastle/CONTEXT.md) + [`docs/adr/`](file:///C:/Users/Manit/Desktop/sandcastle/docs/adr/)). See [`docs/agents/domain.md`](file:///C:/Users/Manit/Desktop/sandcastle/docs/agents/domain.md).
+1. **Inspect**: Read the issue description, acceptance criteria, and repo state.
+2. **Implement**: Use the `implement` and `tdd` skills. Write minimal, clean code satisfying the acceptance criteria test-first.
+3. **Verify**: Run `npm test` and ensure 100% passing tests. Fix regressions immediately.
+4. **Commit**: Stage all files and commit with Conventional Commits referencing the issue.
+5. **Pull Request**: Push branch to remote and create PR via `gh pr create`.
+6. **Merge**: Merge PR via `gh pr merge --merge`.
+7. **Close**: Confirm issue is closed.
 
 ---
 
 ## Coding and Tooling Standards
 
-- **Core CLI**: Cross-platform TypeScript CLI (`sandcastle` / `sc`) and legacy PowerShell Core script (`sandcastle.ps1`).
-- **Agent Interop**: Google Antigravity (`agy`) CLI and subagent protocols.
+- **Core CLI**: Cross-platform TypeScript CLI (`sandcastle` / `sc`). `sandcastle.ps1` is legacy fallback.
+- **Agent Interop**: Google Antigravity (`agy`) CLI sub-processes with model resolution and quota tracking.
 - **Git & GitHub Operations**: Use official `gh` CLI commands (`gh issue`, `gh pr`).
 - **Safety First**: Never bypass permissions or run destructive git operations unless running in authorized AFK worker mode.
