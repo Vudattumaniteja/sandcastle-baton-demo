@@ -77,12 +77,15 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       };
 
       const mockProcessSupervisor = {
-        execute: vi.fn().mockResolvedValue({
-          success: true,
-          status: 'completed',
-          attempts: 1,
-          totalDurationMs: 1500,
-          lastExitCode: 0,
+        execute: vi.fn().mockImplementation(() => {
+          mockIssue.state = 'CLOSED';
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 1500,
+            lastExitCode: 0,
+          });
         }),
       };
 
@@ -270,11 +273,15 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       };
 
       const mockProcessSupervisor = {
-        execute: vi.fn().mockResolvedValue({
-          success: true,
-          status: 'completed',
-          attempts: 1,
-          totalDurationMs: 500,
+        execute: vi.fn().mockImplementation((workerOptions) => {
+          const matched = mockIssues.find((i) => i.number === workerOptions.issueNumber);
+          if (matched) matched.state = 'CLOSED';
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 500,
+          });
         }),
       };
 
@@ -374,11 +381,14 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       };
 
       const mockProcessSupervisor = {
-        execute: vi.fn().mockResolvedValue({
-          success: true,
-          status: 'completed',
-          attempts: 1,
-          totalDurationMs: 800,
+        execute: vi.fn().mockImplementation(() => {
+          childIssue.state = 'CLOSED';
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 800,
+          });
         }),
       };
 
@@ -458,6 +468,7 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       const mockProcessSupervisor = {
         execute: vi.fn().mockImplementation((workerOptions) => {
           executedPrompt = workerOptions.prompt;
+          mockIssue.state = 'CLOSED';
           return Promise.resolve({
             success: true,
             status: 'completed',
@@ -514,11 +525,15 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       };
 
       const mockProcessSupervisor = {
-        execute: vi.fn().mockResolvedValue({
-          success: true,
-          status: 'completed',
-          attempts: 1,
-          totalDurationMs: 300,
+        execute: vi.fn().mockImplementation((workerOptions) => {
+          const matched = mockIssues.find((i) => i.number === workerOptions.issueNumber);
+          if (matched) matched.state = 'CLOSED';
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 300,
+          });
         }),
       };
 
@@ -572,11 +587,15 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       };
 
       const mockProcessSupervisor = {
-        execute: vi.fn().mockResolvedValue({
-          success: true,
-          status: 'completed',
-          attempts: 1,
-          totalDurationMs: 300,
+        execute: vi.fn().mockImplementation((workerOptions) => {
+          const matched = mockIssues.find((i) => i.number === workerOptions.issueNumber);
+          if (matched) matched.state = 'CLOSED';
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 300,
+          });
         }),
       };
 
@@ -627,6 +646,8 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       const mockProcessSupervisor = {
         execute: vi.fn().mockImplementation((workerOptions) => {
           executedIssues.push(workerOptions.issueNumber);
+          const matched = mockIssues.find((i) => i.number === workerOptions.issueNumber);
+          if (matched) matched.state = 'CLOSED';
           return Promise.resolve({
             success: true,
             status: 'completed',
@@ -709,6 +730,7 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       const mockProcessSupervisor = {
         execute: vi.fn().mockImplementation((workerOptions) => {
           generatedPrompt = workerOptions.prompt;
+          childIssue.state = 'CLOSED';
           return Promise.resolve({
             success: true,
             status: 'completed',
@@ -801,6 +823,7 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       const mockProcessSupervisor = {
         execute: vi.fn().mockImplementation((workerOptions) => {
           generatedPrompt = workerOptions.prompt;
+          childIssue.state = 'CLOSED';
           return Promise.resolve({
             success: true,
             status: 'completed',
@@ -880,6 +903,7 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       const mockProcessSupervisor = {
         execute: vi.fn().mockImplementation((workerOptions) => {
           generatedPrompt = workerOptions.prompt;
+          childIssue.state = 'CLOSED';
           return Promise.resolve({
             success: true,
             status: 'completed',
@@ -937,11 +961,14 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       };
 
       const mockProcessSupervisor = {
-        execute: vi.fn().mockResolvedValue({
-          success: true,
-          status: 'completed',
-          attempts: 1,
-          totalDurationMs: 500,
+        execute: vi.fn().mockImplementation(() => {
+          mockIssue.state = 'CLOSED';
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 500,
+          });
         }),
       };
 
@@ -996,11 +1023,14 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       };
 
       const mockProcessSupervisor = {
-        execute: vi.fn().mockResolvedValue({
-          success: true,
-          status: 'completed',
-          attempts: 1,
-          totalDurationMs: 500,
+        execute: vi.fn().mockImplementation(() => {
+          mockIssue.state = 'CLOSED';
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 500,
+          });
         }),
       };
 
@@ -1101,6 +1131,237 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       expect(blockerCall.evidence).not.toContain('\u001b[');
       expect(blockerCall.evidence.length).toBeLessThanOrEqual(30000);
       expect(blockerCall.evidence).toContain('FAIL test/sample.test.ts');
+    });
+  });
+
+  describe('Live Issue Closure Verification & Corrective Retry Protocol (#71)', () => {
+    it('should query GitHub for closure after worker exits 0 and complete cleanly when issue is CLOSED', async () => {
+      const mockIssue: GitHubIssue = {
+        number: 71,
+        title: 'Issue Closure Verification',
+        body: 'Verify closure',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+      };
+
+      const mockGitHubService = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn()
+          // First call (gating): issue is OPEN
+          .mockResolvedValueOnce(mockIssue)
+          // Second call (post-worker verification): issue is CLOSED
+          .mockResolvedValueOnce({ ...mockIssue, state: 'CLOSED' }),
+        reportBlocker: vi.fn(),
+      };
+
+      const mockGatingEvaluator = {
+        evaluateIssue: vi.fn().mockResolvedValue({
+          issueNumber: 71,
+          title: 'Issue Closure Verification',
+          state: 'OPEN',
+          status: 'READY',
+          isReady: true,
+          reasons: ['Ready'],
+        }),
+      };
+
+      const mockProcessSupervisor = {
+        execute: vi.fn().mockResolvedValue({
+          success: true,
+          status: 'completed',
+          attempts: 1,
+          totalDurationMs: 600,
+          lastExitCode: 0,
+        }),
+      };
+
+      const runner = new BatonRunner({
+        repo: 'owner/repo',
+        issues: [71],
+        githubService: mockGitHubService as any,
+        gatingEvaluator: mockGatingEvaluator as any,
+        processSupervisor: mockProcessSupervisor as any,
+        stateFilePath,
+        mode: 'afk',
+      });
+
+      const retriesEmitted: any[] = [];
+      runner.on('worker:retry', (p) => retriesEmitted.push(p));
+
+      const result = await runner.run();
+
+      expect(result.success).toBe(true);
+      expect(result.closedIssues).toEqual([71]);
+      expect(result.blockedIssues).toEqual([]);
+      expect(mockProcessSupervisor.execute).toHaveBeenCalledTimes(1);
+      expect(retriesEmitted).toHaveLength(0);
+      expect(mockGitHubService.getIssue).toHaveBeenCalledTimes(2);
+      expect(mockGitHubService.reportBlocker).not.toHaveBeenCalled();
+    });
+
+    it('should trigger a single corrective retry when worker exits with code 0 but issue remains OPEN, and complete when corrective attempt closes issue', async () => {
+      const mockIssue: GitHubIssue = {
+        number: 71,
+        title: 'Issue Closure Verification',
+        body: 'Verify closure',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+      };
+
+      const mockGitHubService = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn()
+          // First call (gating): OPEN
+          .mockResolvedValueOnce(mockIssue)
+          // Second call (after attempt 1): OPEN
+          .mockResolvedValueOnce({ ...mockIssue, state: 'OPEN' })
+          // Third call (after corrective attempt): CLOSED
+          .mockResolvedValueOnce({ ...mockIssue, state: 'CLOSED' }),
+        reportBlocker: vi.fn(),
+      };
+
+      const mockGatingEvaluator = {
+        evaluateIssue: vi.fn().mockResolvedValue({
+          issueNumber: 71,
+          title: 'Issue Closure Verification',
+          state: 'OPEN',
+          status: 'READY',
+          isReady: true,
+          reasons: ['Ready'],
+        }),
+      };
+
+      const executedPrompts: string[] = [];
+      const mockProcessSupervisor = {
+        execute: vi.fn().mockImplementation((workerOptions) => {
+          executedPrompts.push(workerOptions.prompt);
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 500,
+            lastExitCode: 0,
+          });
+        }),
+      };
+
+      const runner = new BatonRunner({
+        repo: 'owner/repo',
+        issues: [71],
+        githubService: mockGitHubService as any,
+        gatingEvaluator: mockGatingEvaluator as any,
+        processSupervisor: mockProcessSupervisor as any,
+        stateFilePath,
+        mode: 'afk',
+      });
+
+      const retriesEmitted: any[] = [];
+      runner.on('worker:retry', (p) => retriesEmitted.push(p));
+
+      const phasesEmitted: any[] = [];
+      runner.on('worker:phase', (p) => phasesEmitted.push(p));
+
+      const result = await runner.run();
+
+      expect(result.success).toBe(true);
+      expect(result.closedIssues).toEqual([71]);
+      expect(result.blockedIssues).toEqual([]);
+      expect(mockProcessSupervisor.execute).toHaveBeenCalledTimes(2);
+
+      // Verify corrective retry event
+      expect(retriesEmitted).toHaveLength(1);
+      expect(retriesEmitted[0].issueNumber).toBe(71);
+      expect(retriesEmitted[0].attempt).toBe(2);
+
+      // Verify follow-up directive in corrective retry prompt
+      expect(executedPrompts).toHaveLength(2);
+      expect(executedPrompts[1]).toContain('pull request creation');
+      expect(executedPrompts[1]).toContain('merge');
+      expect(executedPrompts[1]).toContain('issue closure');
+
+      expect(mockGitHubService.reportBlocker).not.toHaveBeenCalled();
+    });
+
+    it('should invoke blocker protocol and halt baton when issue remains OPEN after corrective retry', async () => {
+      const mockIssue: GitHubIssue = {
+        number: 71,
+        title: 'Issue Closure Verification',
+        body: 'Verify closure',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+      };
+
+      const mockGitHubService = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn()
+          // First call (gating): OPEN
+          .mockResolvedValueOnce(mockIssue)
+          // Second call (after attempt 1): OPEN
+          .mockResolvedValueOnce({ ...mockIssue, state: 'OPEN' })
+          // Third call (after corrective retry): still OPEN
+          .mockResolvedValueOnce({ ...mockIssue, state: 'OPEN' }),
+        reportBlocker: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const mockGatingEvaluator = {
+        evaluateIssue: vi.fn().mockResolvedValue({
+          issueNumber: 71,
+          title: 'Issue Closure Verification',
+          state: 'OPEN',
+          status: 'READY',
+          isReady: true,
+          reasons: ['Ready'],
+        }),
+      };
+
+      const mockProcessSupervisor = {
+        execute: vi.fn().mockResolvedValue({
+          success: true,
+          status: 'completed',
+          attempts: 1,
+          totalDurationMs: 500,
+          lastExitCode: 0,
+        }),
+      };
+
+      const runner = new BatonRunner({
+        repo: 'owner/repo',
+        issues: [71],
+        githubService: mockGitHubService as any,
+        gatingEvaluator: mockGatingEvaluator as any,
+        processSupervisor: mockProcessSupervisor as any,
+        stateFilePath,
+        mode: 'afk',
+      });
+
+      const blockedEvents: any[] = [];
+      runner.on('baton:blocked', (p) => blockedEvents.push(p));
+
+      const retriesEmitted: any[] = [];
+      runner.on('worker:retry', (p) => retriesEmitted.push(p));
+
+      const result = await runner.run();
+
+      expect(result.success).toBe(false);
+      expect(result.closedIssues).toEqual([]);
+      expect(result.blockedIssues).toEqual([71]);
+      expect(mockProcessSupervisor.execute).toHaveBeenCalledTimes(2);
+      expect(retriesEmitted).toHaveLength(1);
+
+      // Verify blocker protocol was invoked
+      expect(mockGitHubService.reportBlocker).toHaveBeenCalledTimes(1);
+      expect(mockGitHubService.reportBlocker).toHaveBeenCalledWith(
+        expect.objectContaining({
+          issueNumber: 71,
+          reason: expect.stringContaining('remained OPEN'),
+          repo: 'owner/repo',
+        })
+      );
+
+      // Verify baton:blocked event
+      expect(blockedEvents).toHaveLength(1);
+      expect(blockedEvents[0].issueNumber).toBe(71);
+      expect(blockedEvents[0].reason).toContain('remained OPEN');
     });
   });
 });
