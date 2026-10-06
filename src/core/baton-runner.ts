@@ -11,7 +11,12 @@ import type {
 } from '../types/baton.js';
 import type { BatonHandoffPayload } from '../types/handoff.js';
 import { runHandoffTransition } from '../ui/handoff-transition.js';
-import { GitHubService } from '../services/github-service.js';
+import {
+  GitHubService,
+  sanitizeBlockerEvidence,
+  stripAnsi,
+  MAX_BLOCKER_EVIDENCE_LENGTH,
+} from '../services/github-service.js';
 import { AntigravityService } from '../services/antigravity-service.js';
 import { ConfigService } from '../services/config-service.js';
 import { GatingEvaluator } from './gating-evaluator.js';
@@ -553,16 +558,20 @@ export class BatonRunner extends EventEmitter {
         const errorReason =
           superviseResult.error || 'Execution failed verification';
 
+        const rawEvidence =
+          superviseResult.lastStderr || superviseResult.lastStdout;
+        const sanitizedEvidence = sanitizeBlockerEvidence(rawEvidence);
+
         this.emit('baton:blocked', {
           issueNumber,
           reason: errorReason,
-          evidence: superviseResult.lastStderr || superviseResult.lastStdout,
+          evidence: sanitizedEvidence,
         });
 
         await this.githubService.reportBlocker({
           issueNumber,
           reason: errorReason,
-          evidence: superviseResult.lastStderr || superviseResult.lastStdout,
+          evidence: sanitizedEvidence,
           repo: targetRepo,
         });
 

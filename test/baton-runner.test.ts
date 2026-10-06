@@ -1025,5 +1025,83 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       );
     });
   });
+
+  describe('Blocker Evidence Sanitization & Payload Bounding', () => {
+    it('should strip ANSI escape sequences and bound evidence length when worker fails', async () => {
+      const mockIssue: GitHubIssue = {
+        number: 70,
+        title: 'Failing Task',
+        body: 'Do something',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+      };
+
+      const mockGitHubService = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn().mockResolvedValue(mockIssue),
+        reportBlocker: vi.fn().mockResolvedValue(undefined),
+        closeIssue: vi.fn(),
+      };
+
+      const mockGatingEvaluator = {
+        evaluateIssue: vi.fn().mockResolvedValue({
+          issueNumber: 70,
+          title: 'Failing Task',
+          state: 'OPEN',
+          status: 'READY',
+          isReady: true,
+          reasons: ['Ready'],
+        }),
+      };
+
+      const ansiStderr =
+        '\u001b[31mFAIL\u001b[39m test/sample.test.ts\n\u001b[1mError:\u001b[22m Verification failed\n' +
+        'X'.repeat(35000);
+
+      const mockProcessSupervisor = {
+        execute: vi.fn().mockResolvedValue({
+          success: false,
+          status: 'failed',
+          attempts: 2,
+          totalDurationMs: 1200,
+          error: 'Verification failed',
+          lastStderr: ansiStderr,
+        }),
+      };
+
+      const runner = new BatonRunner({
+        repo: 'owner/repo',
+        issues: [70],
+        githubService: mockGitHubService as any,
+        gatingEvaluator: mockGatingEvaluator as any,
+        processSupervisor: mockProcessSupervisor as any,
+        stateFilePath,
+        mode: 'afk',
+      });
+
+      const blockedEvents: any[] = [];
+      runner.on('baton:blocked', (p) => blockedEvents.push(p));
+
+      const result = await runner.run();
+
+      expect(result.success).toBe(false);
+      expect(result.blockedIssues).toEqual([70]);
+
+      // Check emitted baton:blocked event
+      expect(blockedEvents).toHaveLength(1);
+      const event = blockedEvents[0];
+      expect(event.evidence).toBeDefined();
+      expect(event.evidence).not.toContain('\u001b[');
+      expect(event.evidence.length).toBeLessThanOrEqual(30000);
+      expect(event.evidence).toContain('FAIL test/sample.test.ts');
+
+      // Check githubService.reportBlocker call
+      expect(mockGitHubService.reportBlocker).toHaveBeenCalledTimes(1);
+      const blockerCall = mockGitHubService.reportBlocker.mock.calls[0][0];
+      expect(blockerCall.evidence).not.toContain('\u001b[');
+      expect(blockerCall.evidence.length).toBeLessThanOrEqual(30000);
+      expect(blockerCall.evidence).toContain('FAIL test/sample.test.ts');
+    });
+  });
 });
 

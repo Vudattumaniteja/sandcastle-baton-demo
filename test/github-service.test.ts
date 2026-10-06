@@ -354,6 +354,54 @@ describe('GitHubService', () => {
         expect.any(Object)
       );
     });
+
+    it('should strip ANSI escape sequences from evidence before formatting blocker comment', async () => {
+      mockExecutor
+        .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 }) // edit add-label
+        .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 }); // comment
+
+      const service = new GitHubService({ repo: 'owner/repo', executor: mockExecutor });
+      const ansiEvidence =
+        '\u001b[31mError:\u001b[39m Test failed with \u001b[1mexit code 1\u001b[22m\n\u001b[2K\u001b[?25h';
+      await service.reportBlocker({
+        issueNumber: 23,
+        reason: 'Execution failed',
+        evidence: ansiEvidence,
+      });
+
+      const commentCall = mockExecutor.mock.calls[1];
+      const commentArgs = commentCall[1] as string[];
+      const bodyArg = commentArgs[commentArgs.indexOf('--body') + 1];
+
+      expect(bodyArg).toContain('Error: Test failed with exit code 1');
+      expect(bodyArg).not.toContain('\u001b[');
+      expect(bodyArg).not.toContain('\u001b');
+    });
+
+    it('should truncate blocker comment evidence exceeding 30,000 characters and retain clean markdown code fences', async () => {
+      mockExecutor
+        .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 }) // edit add-label
+        .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 }); // comment
+
+      const service = new GitHubService({ repo: 'owner/repo', executor: mockExecutor });
+      const oversizedEvidence = 'E'.repeat(35000);
+      await service.reportBlocker({
+        issueNumber: 23,
+        reason: 'Oversized evidence failure',
+        evidence: oversizedEvidence,
+      });
+
+      const commentCall = mockExecutor.mock.calls[1];
+      const commentArgs = commentCall[1] as string[];
+      const bodyArg = commentArgs[commentArgs.indexOf('--body') + 1];
+
+      // Code block fence must be clean and present
+      expect(bodyArg).toContain('```\n' + 'E'.repeat(30000) + '\n```');
+      // Evidence must not exceed 30,000 characters
+      expect(bodyArg).not.toContain('E'.repeat(30001));
+      // Code block must cleanly close
+      expect(bodyArg).toMatch(/### Evidence \/ Output\n```\nE{30000}\n```/);
+    });
   });
 
   describe('Parent Issue Progress Synchronization & Audit Comments', () => {
