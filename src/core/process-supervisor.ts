@@ -14,7 +14,7 @@ export class ProcessSupervisor {
   private maxRetries: number;
   private outerTimeoutMs?: number;
   private escalationGracePeriodMs: number;
-  private sleeper: (ms: number) => Promise<void>;
+  private sleeper: (ms: number, signal?: AbortSignal) => Promise<void>;
   private onEvent?: (event: SupervisorEvent) => void;
   private activeController?: AbortController;
   private signalCleanup?: () => void;
@@ -25,8 +25,35 @@ export class ProcessSupervisor {
     this.outerTimeoutMs = options.outerTimeoutMs;
     this.escalationGracePeriodMs = options.escalationGracePeriodMs ?? 5000;
     this.sleeper =
-      options.sleeper ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+      options.sleeper ?? ((ms, signal) => this.sleep(ms, signal));
     this.onEvent = options.onEvent;
+  }
+
+  /**
+   * Cancellable delay using AbortSignal. Active timers are cleared immediately on abort.
+   */
+  async sleep(ms: number, signal?: AbortSignal): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(signal.reason ?? new Error('Aborted'));
+        return;
+      }
+
+      let timer: NodeJS.Timeout | undefined;
+      const onAbort = () => {
+        if (timer) {
+          clearTimeout(timer);
+        }
+        reject(signal?.reason ?? new Error('Aborted'));
+      };
+
+      timer = setTimeout(() => {
+        signal?.removeEventListener('abort', onAbort);
+        resolve();
+      }, ms);
+
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
   }
 
   /**
@@ -90,13 +117,15 @@ export class ProcessSupervisor {
    * Evaluates if a worker result indicates an HTTP 429 / Quota limit error.
    */
   isQuotaError(result: { exitCode?: number; stderr?: string; stdout?: string }): boolean {
+    if (result.exitCode === undefined || result.exitCode === 0) {
+      return false;
+    }
     if (result.exitCode === 429) {
       return true;
     }
-    const combinedOutput = `${result.stderr || ''} ${result.stdout || ''}`;
-    const quotaRegex =
-      /(?:429|quota\s+exceeded|rate\s+limit|resource_exhausted|too\s+many\s+requests)/i;
-    return quotaRegex.test(combinedOutput);
+    const stderr = result.stderr || '';
+    const quotaRegex = /(?:RESOURCE_EXHAUSTED|\(code 429\)|quota reached)/i;
+    return quotaRegex.test(stderr);
   }
 
   /**
@@ -149,6 +178,7 @@ export class ProcessSupervisor {
   ): Promise<SuperviseResult> {
     const maxAttempts = 1 + this.maxRetries;
     let attempt = 1;
+    let consecutiveQuotaPauses = 0;
     let totalDurationMs = 0;
     let lastResult: AntigravityWorkerResult | undefined;
     let failureFeedback = '';
@@ -268,6 +298,37 @@ export class ProcessSupervisor {
 
         // Check for HTTP 429 Quota Rate Limit
         if (this.isQuotaError(runResult)) {
+          if (consecutiveQuotaPauses >= 3) {
+            failureFeedback =
+              runResult.stderr || 'Quota rate limit exceeded maximum consecutive pauses (3)';
+            this.emit({
+              type: 'attempt_failed',
+              attempt,
+              maxAttempts,
+              issueNumber: workerOptions.issueNumber,
+              error: failureFeedback,
+              exitCode: runResult.exitCode,
+            });
+            this.emit({
+              type: 'blocked',
+              issueNumber: workerOptions.issueNumber,
+              reason: `Exceeded maximum consecutive quota pauses (3). Final error: ${failureFeedback}`,
+              totalAttempts: attempt,
+            });
+            this.restoreCursor();
+            return {
+              success: false,
+              status: 'blocked',
+              attempts: attempt,
+              totalDurationMs,
+              lastExitCode: runResult.exitCode,
+              lastStdout: runResult.stdout,
+              lastStderr: runResult.stderr,
+              error: failureFeedback,
+            };
+          }
+
+          consecutiveQuotaPauses++;
           const pauseDelayMs = await this.resolveQuotaDelayMs();
           const resumeAt = new Date(Date.now() + pauseDelayMs);
 
@@ -278,12 +339,48 @@ export class ProcessSupervisor {
             resumeAt,
           });
 
-          await this.sleeper(pauseDelayMs);
+          const pauseController = new AbortController();
+          this.activeController = pauseController;
+
+          const onParentAbort = () => pauseController.abort();
+          if (parentSignal) {
+            if (parentSignal.aborted) {
+              pauseController.abort();
+            } else {
+              parentSignal.addEventListener('abort', onParentAbort);
+            }
+          }
+
+          try {
+            await this.sleeper(pauseDelayMs, pauseController.signal);
+          } catch (err) {
+            if (parentSignal?.aborted || pauseController.signal.aborted) {
+              this.restoreCursor();
+              return {
+                success: false,
+                status: 'aborted',
+                attempts: attempt,
+                totalDurationMs,
+                lastExitCode: runResult.exitCode,
+                lastStdout: runResult.stdout,
+                lastStderr: runResult.stderr,
+                error: 'Process was aborted by signal.',
+              };
+            }
+            throw err;
+          } finally {
+            if (parentSignal) {
+              parentSignal.removeEventListener('abort', onParentAbort);
+            }
+            this.activeController = undefined;
+          }
 
           this.emit({ type: 'quota_resume' });
           // Retry without consuming attempt
           continue;
         }
+
+        consecutiveQuotaPauses = 0;
 
         // Check success
         if (runResult.exitCode === 0) {
