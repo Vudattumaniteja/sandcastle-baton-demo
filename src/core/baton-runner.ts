@@ -476,7 +476,7 @@ export class BatonRunner extends EventEmitter {
         message: 'Launching Antigravity worker session',
       });
 
-      const superviseResult = await this.processSupervisor.execute(
+      let superviseResult = await this.processSupervisor.execute(
         {
           repo: targetRepo,
           issueNumber,
@@ -490,9 +490,90 @@ export class BatonRunner extends EventEmitter {
         this.options.signal
       );
 
-      const issueDurationMs = Date.now() - issueStartTime;
-
       if (superviseResult.success) {
+        this.emit('worker:phase', {
+          issueNumber,
+          phase: 'close',
+          message: 'Verifying closure',
+        });
+
+        let liveIssue = await this.githubService.getIssue(issueNumber, targetRepo);
+
+        if (liveIssue?.state?.toUpperCase() === 'OPEN') {
+          const correctiveDirective = `\n\n[Sandcastle Worker Contract Directive]\nWorker process exited with code 0, but issue #${issueNumber} remains OPEN on GitHub.\nPlease finish pull request creation (gh pr create), merge (gh pr merge --merge), and issue closure (gh issue close ${issueNumber}).`;
+          const correctivePrompt = `${workerPrompt}${correctiveDirective}`;
+
+          this.emit('worker:retry', {
+            issueNumber,
+            attempt: 2,
+            maxAttempts,
+            error: `Issue #${issueNumber} remained OPEN after worker process completed. Triggering corrective retry to finish pull request creation, merge, and issue closure.`,
+          });
+
+          this.emit('worker:phase', {
+            issueNumber,
+            phase: 'close',
+            message: `Issue #${issueNumber} is still OPEN; retrying to finish PR creation, merge, and issue closure`,
+          });
+
+          superviseResult = await this.processSupervisor.execute(
+            {
+              repo: targetRepo,
+              issueNumber,
+              prompt: correctivePrompt,
+              model: this.options.model ?? config.model,
+              reasoningEffort:
+                this.options.reasoningEffort ?? config.reasoningEffort,
+              timeout: this.options.timeout ?? config.timeout,
+              cwd: this.cwd,
+            },
+            this.options.signal
+          );
+
+          liveIssue = await this.githubService.getIssue(issueNumber, targetRepo);
+        }
+
+        const isClosed = liveIssue?.state?.toUpperCase() === 'CLOSED';
+        if (!isClosed) {
+          const errorReason =
+            superviseResult.error ||
+            `Issue #${issueNumber} remained OPEN on GitHub after corrective retry.`;
+          const rawEvidence =
+            superviseResult.lastStderr || superviseResult.lastStdout;
+          const sanitizedEvidence = sanitizeBlockerEvidence(rawEvidence);
+
+          this.emit('baton:blocked', {
+            issueNumber,
+            reason: errorReason,
+            evidence: sanitizedEvidence,
+            remediation:
+              'Ensure the worker completes pull request creation, merge, and issue closure.',
+          });
+
+          await this.githubService.reportBlocker({
+            issueNumber,
+            reason: errorReason,
+            evidence: sanitizedEvidence,
+            repo: targetRepo,
+            remediation:
+              'Ensure the worker completes pull request creation, merge, and issue closure.',
+          });
+
+          blockedIssues.push(issueNumber);
+          processedIssues.push({
+            number: issueNumber,
+            title: issue.title,
+            status: 'blocked',
+            durationMs: Date.now() - issueStartTime,
+            error: errorReason,
+          });
+          snapshot.blockedCount++;
+          snapshot.status = 'blocked';
+          break;
+        }
+
+        const issueDurationMs = Date.now() - issueStartTime;
+
         // Sync parent checklist and post progress comment on parent issues
         if (parentNumbers.length > 0) {
           for (const parentNum of parentNumbers) {
@@ -514,11 +595,6 @@ export class BatonRunner extends EventEmitter {
           }
         }
 
-        this.emit('worker:phase', {
-          issueNumber,
-          phase: 'close',
-          message: 'Verifying closure',
-        });
         this.emit('worker:complete', {
           issueNumber,
           durationMs: issueDurationMs,
@@ -580,7 +656,7 @@ export class BatonRunner extends EventEmitter {
           number: issueNumber,
           title: issue.title,
           status: 'blocked',
-          durationMs: issueDurationMs,
+          durationMs: Date.now() - issueStartTime,
           error: errorReason,
         });
         snapshot.blockedCount++;
