@@ -21,7 +21,7 @@ export interface ProcessSupervisorOptions {
   maxRetries?: number; // default: 2 (meaning 3 total attempts)
   outerTimeoutMs?: number; // Outer supervisor watchdog timeout in ms
   escalationGracePeriodMs?: number; // Escalation window before SIGKILL (default 5000ms)
-  sleeper?: (ms: number) => Promise<void>;
+  sleeper?: (ms: number, signal?: AbortSignal) => Promise<void>;
   onEvent?: (event: SupervisorEvent) => void;
 }
 

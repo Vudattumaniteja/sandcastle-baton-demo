@@ -184,13 +184,244 @@ describe('ProcessSupervisor', () => {
       expect(mockSleeper).toHaveBeenCalled();
     });
 
-    it('should identify quota errors from stdout, stderr, or statusline', () => {
+    it('should enforce a hard ceiling of 3 consecutive quota pauses and exit with blocked failure if exceeded', async () => {
+      // 4 consecutive quota errors: 3 should pause, the 4th should exceed ceiling and fail
+      mockAntigravityService.runWorker = vi
+        .fn()
+        .mockResolvedValueOnce({
+          exitCode: 429,
+          stdout: '',
+          stderr: 'RESOURCE_EXHAUSTED',
+          durationMs: 50,
+        })
+        .mockResolvedValueOnce({
+          exitCode: 429,
+          stdout: '',
+          stderr: 'RESOURCE_EXHAUSTED',
+          durationMs: 50,
+        })
+        .mockResolvedValueOnce({
+          exitCode: 429,
+          stdout: '',
+          stderr: 'RESOURCE_EXHAUSTED',
+          durationMs: 50,
+        })
+        .mockResolvedValueOnce({
+          exitCode: 429,
+          stdout: '',
+          stderr: 'RESOURCE_EXHAUSTED',
+          durationMs: 50,
+        });
+
+      const mockSleeper = vi.fn().mockResolvedValue(undefined);
+
+      const supervisor = new ProcessSupervisor({
+        antigravityService: mockAntigravityService as AntigravityService,
+        maxRetries: 2,
+        sleeper: mockSleeper,
+        onEvent: (e) => recordedEvents.push(e),
+      });
+
+      const result = await supervisor.execute({
+        repo: 'owner/repo',
+        issueNumber: 10,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.status).toBe('blocked');
+      expect(mockSleeper).toHaveBeenCalledTimes(3);
+
+      const pauseEvents = recordedEvents.filter((e) => e.type === 'quota_pause');
+      expect(pauseEvents).toHaveLength(3);
+
+      const blockedEvent = recordedEvents.find((e) => e.type === 'blocked');
+      expect(blockedEvent).toBeDefined();
+    });
+
+    it('should reset consecutive quota pause count after a non-quota outcome', async () => {
+      mockAntigravityService.runWorker = vi
+        .fn()
+        // Attempt 1: quota error -> pause 1
+        .mockResolvedValueOnce({
+          exitCode: 429,
+          stdout: '',
+          stderr: 'RESOURCE_EXHAUSTED',
+          durationMs: 50,
+        })
+        // Attempt 1 retry: non-quota failure (resets consecutive quota pauses)
+        .mockResolvedValueOnce({
+          exitCode: 1,
+          stdout: '',
+          stderr: 'Build error',
+          durationMs: 50,
+        })
+        // Attempt 2: quota error -> pause 2
+        .mockResolvedValueOnce({
+          exitCode: 429,
+          stdout: '',
+          stderr: 'RESOURCE_EXHAUSTED',
+          durationMs: 50,
+        })
+        // Attempt 2 retry: non-quota failure
+        .mockResolvedValueOnce({
+          exitCode: 1,
+          stdout: '',
+          stderr: 'Test failure',
+          durationMs: 50,
+        })
+        // Attempt 3: success
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          stdout: 'Success',
+          stderr: '',
+          durationMs: 50,
+        });
+
+      const mockSleeper = vi.fn().mockResolvedValue(undefined);
+
+      const supervisor = new ProcessSupervisor({
+        antigravityService: mockAntigravityService as AntigravityService,
+        maxRetries: 2,
+        sleeper: mockSleeper,
+        onEvent: (e) => recordedEvents.push(e),
+      });
+
+      const result = await supervisor.execute({
+        repo: 'owner/repo',
+        issueNumber: 10,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.status).toBe('completed');
+      expect(mockSleeper).toHaveBeenCalledTimes(2);
+    });
+
+    it('should wire AbortSignal into sleep backoff promise so abort events clear active timers and reject immediately', async () => {
+      const supervisor = new ProcessSupervisor();
+      const controller = new AbortController();
+
+      const startTime = Date.now();
+      const sleepPromise = (supervisor as any).sleep(5000, controller.signal);
+
+      // Abort after 20ms
+      setTimeout(() => controller.abort(), 20);
+
+      await expect(sleepPromise).rejects.toThrow();
+      const elapsed = Date.now() - startTime;
+      expect(elapsed).toBeLessThan(1000);
+    });
+
+    it('should reject immediately if AbortSignal is already aborted when sleep is called', async () => {
+      const supervisor = new ProcessSupervisor();
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect((supervisor as any).sleep(5000, controller.signal)).rejects.toThrow();
+    });
+
+    it('should abort during quota pause sleep when parentSignal triggers abort', async () => {
+      mockAntigravityService.runWorker = vi.fn().mockResolvedValue({
+        exitCode: 429,
+        stdout: '',
+        stderr: 'RESOURCE_EXHAUSTED',
+        durationMs: 50,
+      });
+
+      const parentController = new AbortController();
+      let capturedSignal: AbortSignal | undefined;
+
+      const supervisor = new ProcessSupervisor({
+        antigravityService: mockAntigravityService as AntigravityService,
+        sleeper: vi.fn().mockImplementation((_ms, signal) => {
+          capturedSignal = signal;
+          return new Promise((_resolve, reject) => {
+            signal?.addEventListener('abort', () => reject(new Error('Aborted by signal')));
+          });
+        }),
+        onEvent: (e) => recordedEvents.push(e),
+      });
+
+      const execPromise = supervisor.execute(
+        { repo: 'owner/repo', issueNumber: 10 },
+        parentController.signal
+      );
+
+      // Wait a tick for execution to enter quota sleep
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(capturedSignal).toBeDefined();
+      expect(capturedSignal?.aborted).toBe(false);
+
+      // Trigger parent abort
+      parentController.abort();
+
+      const result = await execPromise;
+      expect(result.success).toBe(false);
+      expect(result.status).toBe('aborted');
+      expect(capturedSignal?.aborted).toBe(true);
+    });
+
+    it('should abort during quota pause sleep when SIGINT signal is received', async () => {
+      mockAntigravityService.runWorker = vi.fn().mockResolvedValue({
+        exitCode: 429,
+        stdout: '',
+        stderr: 'RESOURCE_EXHAUSTED',
+        durationMs: 50,
+      });
+
+      let capturedSignal: AbortSignal | undefined;
+
+      const supervisor = new ProcessSupervisor({
+        antigravityService: mockAntigravityService as AntigravityService,
+        sleeper: vi.fn().mockImplementation((_ms, signal) => {
+          capturedSignal = signal;
+          return new Promise((_resolve, reject) => {
+            signal?.addEventListener('abort', () => reject(new Error('Aborted by signal')));
+          });
+        }),
+        onEvent: (e) => recordedEvents.push(e),
+      });
+
+      const execPromise = supervisor.execute({ repo: 'owner/repo', issueNumber: 10 });
+
+      // Wait a tick for execution to enter quota sleep
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(capturedSignal).toBeDefined();
+      expect(capturedSignal?.aborted).toBe(false);
+
+      // Trigger SIGINT event on process
+      process.emit('SIGINT');
+
+      const result = await execPromise;
+      expect(result.success).toBe(false);
+      expect(result.status).toBe('aborted');
+      expect(capturedSignal?.aborted).toBe(true);
+    });
+
+    it('should identify quota errors only for non-zero exit codes and matching stderr signatures', () => {
       const supervisor = new ProcessSupervisor();
 
+      // Non-zero exit code with matching stderr signatures
       expect(supervisor.isQuotaError({ exitCode: 429, stderr: '', stdout: '' })).toBe(true);
       expect(supervisor.isQuotaError({ exitCode: 1, stderr: 'RESOURCE_EXHAUSTED', stdout: '' })).toBe(true);
-      expect(supervisor.isQuotaError({ exitCode: 1, stderr: 'Rate limit reached, retry after 30s', stdout: '' })).toBe(true);
+      expect(supervisor.isQuotaError({ exitCode: 1, stderr: 'Error: (code 429)', stdout: '' })).toBe(true);
+      expect(supervisor.isQuotaError({ exitCode: 1, stderr: 'API quota reached for model', stdout: '' })).toBe(true);
+
+      // Must require non-zero exit code
+      expect(supervisor.isQuotaError({ exitCode: 0, stderr: 'RESOURCE_EXHAUSTED', stdout: '' })).toBe(false);
+      expect(supervisor.isQuotaError({ exitCode: 0, stderr: '(code 429)', stdout: '' })).toBe(false);
+      expect(supervisor.isQuotaError({ exitCode: 0, stderr: 'quota reached', stdout: '' })).toBe(false);
+      expect(supervisor.isQuotaError({ stderr: 'RESOURCE_EXHAUSTED', stdout: '' })).toBe(false);
+
+      // Must ignore stdout completely
+      expect(supervisor.isQuotaError({ exitCode: 1, stderr: '', stdout: 'RESOURCE_EXHAUSTED' })).toBe(false);
+      expect(supervisor.isQuotaError({ exitCode: 1, stderr: '', stdout: '(code 429)' })).toBe(false);
+      expect(supervisor.isQuotaError({ exitCode: 1, stderr: '', stdout: 'quota reached' })).toBe(false);
+
+      // Non-quota errors should return false
       expect(supervisor.isQuotaError({ exitCode: 1, stderr: 'TypeError: undefined is not a function', stdout: '' })).toBe(false);
+      expect(supervisor.isQuotaError({ exitCode: 1, stderr: 'Rate limit reached, retry after 30s', stdout: '' })).toBe(false);
     });
 
     it('should ignore expired quota pools (reset_time <= now) and select active pool for delay', async () => {
