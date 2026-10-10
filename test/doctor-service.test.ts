@@ -16,7 +16,6 @@ describe('DoctorService (Health & Environment Validation)', () => {
   });
 
   it('should report healthy when all environment checks and workspace assets pass', async () => {
-    // Create workspace assets
     fs.writeFileSync(path.join(tempDir, 'SKILL.md'), '# Skill');
     fs.writeFileSync(path.join(tempDir, 'CONTEXT.md'), '# Context');
     fs.writeFileSync(path.join(tempDir, 'AGENTS.md'), '# Agents');

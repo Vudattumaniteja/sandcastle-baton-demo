@@ -18,7 +18,7 @@ describe('TranscriptTailer', () => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch {
-      // ignore
+      // Tolerates ENOENT or file lock race during tmpDir cleanup
     }
   });
 

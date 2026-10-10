@@ -1,9 +1,9 @@
 import type { BatonRunnerOptions, BatonFinishPayload, ExecutionScope } from './baton.js';
-import type { GitHubService } from '../services/github-service.js';
-import type { AntigravityService } from '../services/antigravity-service.js';
-import type { DoctorService } from '../services/doctor-service.js';
-import type { ConfigService } from '../services/config-service.js';
-import type { GatingEvaluator } from '../core/gating-evaluator.js';
+import type { DoctorReport } from './doctor.js';
+import type { ModelInfo, StatuslineSnapshot } from './antigravity.js';
+import type { GatingEvaluation } from './gating.js';
+import type { SandcastleConfig } from './config.js';
+import type { GitHubIssue } from './github.js';
 
 export interface WizardPromptOption<T = any> {
   value: T;
@@ -57,13 +57,48 @@ export interface WizardManifest {
   parentContext?: 'reference' | 'inline' | 'none';
 }
 
+export interface WizardDoctorContract {
+  runDiagnostics(): Promise<DoctorReport>;
+}
+
+export interface WizardGitHubContract {
+  getRepo(repo?: string): Promise<string>;
+  listIssues(options?: any): Promise<GitHubIssue[]>;
+  getIssue(number: number, repo?: string): Promise<GitHubIssue | null>;
+  [key: string]: any;
+}
+
+export interface WizardAntigravityContract {
+  discoverModels(): Promise<ModelInfo[]>;
+  getStatuslineSnapshot(now?: number | Date): Promise<StatuslineSnapshot | null>;
+  [key: string]: any;
+}
+
+export interface WizardGatingContract {
+  evaluateIssue(
+    issue: GitHubIssue,
+    repo?: string,
+    backlogMap?: Map<number, GitHubIssue>
+  ): Promise<GatingEvaluation>;
+  evaluateBacklog(
+    issues: GitHubIssue[],
+    repo?: string
+  ): Promise<Map<number, GatingEvaluation>>;
+  [key: string]: any;
+}
+
+export interface WizardConfigContract {
+  resolve(overrides?: Partial<SandcastleConfig>): SandcastleConfig;
+  [key: string]: any;
+}
+
 export interface WizardDependencies {
   prompts?: WizardPrompts;
-  doctorService?: DoctorService;
-  githubService?: GitHubService;
-  antigravityService?: AntigravityService;
-  gatingEvaluator?: GatingEvaluator;
-  configService?: ConfigService;
+  doctorService?: WizardDoctorContract;
+  githubService?: WizardGitHubContract;
+  antigravityService?: WizardAntigravityContract;
+  gatingEvaluator?: WizardGatingContract;
+  configService?: WizardConfigContract;
   runnerFactory?: (options: BatonRunnerOptions) => {
     run: () => Promise<BatonFinishPayload>;
     on: (event: string, listener: (...args: any[]) => void) => any;

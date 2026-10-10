@@ -67,13 +67,11 @@ describe('Baton Handoff Banners & Interactive Pacing Controller (Issue #45)', ()
     it('should format Clack step note card for wizard mode with completed summary, queue progress, next preview, parent relationship, and model engine', () => {
       const output = renderWizardMode(samplePayload);
 
-      // Completed summary
       expect(output).toContain('Issue #36 closed successfully');
       expect(output).toContain('42.8s');
       expect(output).toContain('PR #12 merged');
       expect(output).toContain('14 tests passed');
 
-      // Note card structure
       expect(output).toContain('Sandcastle Baton Handoff Note');
       expect(output).toContain('Completed:');
       expect(output).toContain('#36');
@@ -84,17 +82,14 @@ describe('Baton Handoff Banners & Interactive Pacing Controller (Issue #45)', ()
       expect(output).toContain('#37');
       expect(output).toContain('[READY]');
 
-      // Parent relationship
       expect(output).toContain('Parent:');
       expect(output).toContain('#34');
       expect(output).toContain('Child 3 of 5');
 
-      // Model engine
       expect(output).toContain('Engine:');
       expect(output).toContain('gemini-3.7-flash');
       expect(output).toContain('high');
 
-      // Countdown
       expect(output).toContain('3.0s');
     });
 
@@ -107,13 +102,11 @@ describe('Baton Handoff Banners & Interactive Pacing Controller (Issue #45)', ()
     it('should render run mode with Boxed Relay Scorecard layout, queue progress bar, next candidate box, and controls hint', () => {
       const output = renderRunMode({ ...samplePayload, mode: 'run' });
 
-      // Scorecard box
       expect(output).toContain('BATON COMPLETED');
       expect(output).toContain('Issue #36');
       expect(output).toContain('PR #12');
       expect(output).toContain('14 passed');
 
-      // Relay transfer bar
       expect(output).toContain('BATON IN FLIGHT');
       expect(output).toContain('Queue Progress:');
       expect(output).toContain('40%');
@@ -129,7 +122,6 @@ describe('Baton Handoff Banners & Interactive Pacing Controller (Issue #45)', ()
       expect(output).toContain('Criteria Preview:');
       expect(output).toContain('Adaptive rendering across all 4 CLI');
 
-      // Keyboard controls hint
       expect(output).toContain('Controls:');
       expect(output).toContain('[Space]');
       expect(output).toContain('[Enter]');
@@ -225,7 +217,6 @@ describe('Baton Handoff Banners & Interactive Pacing Controller (Issue #45)', ()
       expect(mockStdin.setRawMode).toHaveBeenCalledWith(true);
       expect(mockStdin.resume).toHaveBeenCalled();
 
-      // Advance time by 1.2s
       await vi.advanceTimersByTimeAsync(1200);
 
       const result = await controllerPromise;
@@ -254,21 +245,17 @@ describe('Baton Handoff Banners & Interactive Pacing Controller (Issue #45)', ()
 
       const promise = controller.start();
 
-      // Emit Space keypress -> Paused
       mockStdin.emit('data', Buffer.from(' '));
       expect(controller.getIsPaused()).toBe(true);
       expect(isPausedState).toBe(true);
 
-      // Advance time while paused - remaining seconds should not decrement
       const remBefore = controller.getRemainingSeconds();
       await vi.advanceTimersByTimeAsync(1000);
       expect(controller.getRemainingSeconds()).toBe(remBefore);
 
-      // Emit 'p' keypress -> Resumed
       mockStdin.emit('data', Buffer.from('p'));
       expect(controller.getIsPaused()).toBe(false);
 
-      // Advance remaining time
       await vi.advanceTimersByTimeAsync(3200);
       const result = await promise;
       expect(result).toBe('continue');
@@ -288,7 +275,6 @@ describe('Baton Handoff Banners & Interactive Pacing Controller (Issue #45)', ()
         onFastForward,
       });
 
-      // Press Enter
       mockStdin.emit('data', Buffer.from('\r'));
 
       const result = await controllerPromise;
@@ -309,7 +295,6 @@ describe('Baton Handoff Banners & Interactive Pacing Controller (Issue #45)', ()
         onSkip,
       });
 
-      // Press 's'
       mockStdin.emit('data', Buffer.from('s'));
 
       const result = await controllerPromise;
@@ -330,7 +315,6 @@ describe('Baton Handoff Banners & Interactive Pacing Controller (Issue #45)', ()
         onAbort,
       });
 
-      // Press 'q'
       mockStdin.emit('data', Buffer.from('q'));
 
       const result = await controllerPromise;

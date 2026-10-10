@@ -333,11 +333,11 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
   it('should filter out parent and HITL issues from the main issue picker options', async () => {
     mockPrompts.select = vi
       .fn()
-      .mockResolvedValueOnce(28) // 1. Pick issue #28 (non-child)
-      .mockResolvedValueOnce('only') // 2. Follow-up: 'only'
-      .mockResolvedValueOnce('Gemini 3.7 Flash (High)') // 3. Model
-      .mockResolvedValueOnce('high') // 4. Effort
-      .mockResolvedValueOnce('afk'); // 5. Mode
+      .mockResolvedValueOnce(28)
+      .mockResolvedValueOnce('only')
+      .mockResolvedValueOnce('Gemini 3.7 Flash (High)')
+      .mockResolvedValueOnce('high')
+      .mockResolvedValueOnce('afk');
 
     mockPrompts.confirm = vi.fn().mockResolvedValueOnce(true); // Manifest confirmation
 
@@ -376,15 +376,6 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
   });
 
   it('should run 2-step issue selection with "Run only issue #<num>" (default) setting scope: { type: "only", targets: [num] } and manifest target: "Single Issue (#<num>)"', async () => {
-    // Select answers:
-    // 1. Issue: 26 (child task)
-    // 2. Action: 'only' (Default: Run only issue #26)
-    // 3. Model: 'Gemini 3.7 Flash (High)'
-    // 4. Effort: 'high'
-    // 5. Mode: 'afk'
-    // Confirm:
-    // 1. Parent context: true
-    // 2. Launch manifest: true
     mockPrompts.select = vi
       .fn()
       .mockResolvedValueOnce(26)
@@ -502,10 +493,10 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
   it('should advance directly to model selection when "all" ready issues is selected without a follow-up scope prompt, setting scope: { type: "all" } and manifest target: "Full Backlog"', async () => {
     mockPrompts.select = vi
       .fn()
-      .mockResolvedValueOnce('all') // 1. Issue picker: 'all'
-      .mockResolvedValueOnce('Gemini 3.7 Flash (High)') // 2. Model (NO follow-up scope prompt!)
-      .mockResolvedValueOnce('high') // 3. Effort
-      .mockResolvedValueOnce('afk'); // 4. Mode
+      .mockResolvedValueOnce('all')
+      .mockResolvedValueOnce('Gemini 3.7 Flash (High)')
+      .mockResolvedValueOnce('high')
+      .mockResolvedValueOnce('afk');
 
     mockPrompts.confirm = vi
       .fn()
@@ -577,8 +568,8 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
     const cancelSymbol = Symbol('cancel');
     mockPrompts.select = vi
       .fn()
-      .mockResolvedValueOnce(26) // 1. Issue #26
-      .mockResolvedValueOnce(cancelSymbol); // 2. Cancel at follow-up prompt
+      .mockResolvedValueOnce(26)
+      .mockResolvedValueOnce(cancelSymbol);
 
     const deps: WizardDependencies = {
       prompts: mockPrompts,
@@ -602,8 +593,8 @@ describe('Interactive Guided Wizard (Variant A TUI Flow)', () => {
     const cancelSymbol = Symbol('cancel');
     mockPrompts.select = vi
       .fn()
-      .mockResolvedValueOnce(26) // 1. Issue #26
-      .mockResolvedValueOnce('only'); // 2. Follow-up: 'only'
+      .mockResolvedValueOnce(26)
+      .mockResolvedValueOnce('only');
 
     mockPrompts.confirm = vi.fn().mockResolvedValueOnce(cancelSymbol); // Cancel at parent context confirm
 

@@ -14,6 +14,7 @@ export interface WatchMonitorOptions {
   stdout?: NodeJS.WriteStream;
   onExit?: () => void;
   statuslineSnapshot?: StatuslineSnapshot | null;
+  appDataDir?: string;
 }
 
 export interface WatchDashboardData {
