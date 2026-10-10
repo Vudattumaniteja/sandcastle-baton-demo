@@ -1,22 +1,6 @@
-export interface SandcastleConfig {
-  model?: string;
-  reasoningEffort?: 'low' | 'medium' | 'high';
-  mode?: 'afk' | 'supervised' | 'dry-run';
-  timeout?: string;
-  retries?: number;
-  autoPr?: boolean;
-  autoMerge?: boolean;
-  repo?: string;
-  parentLabels?: string[];
-  hitlLabels?: string[];
-  promptTemplate?: string;
-  parentContext?: 'reference' | 'inline' | 'none';
-}
-
-export type ConfigKey = keyof SandcastleConfig;
-
-export interface ConfigServiceOptions {
-  localConfigPath?: string;
-  globalConfigPath?: string;
-  cwd?: string;
-}
+export type {
+  SandcastleConfig,
+  ConfigKey,
+  ConfigResolutionReport,
+  ConfigStoreOptions as ConfigServiceOptions,
+} from '#packages/state';

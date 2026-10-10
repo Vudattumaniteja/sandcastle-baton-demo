@@ -553,7 +553,6 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       expect(result.totalProcessed).toBe(2);
       expect(result.closedIssues).toEqual([20, 25]);
 
-      // Check snapshot
       const snapshot: BatonRunSnapshot = JSON.parse(fs.readFileSync(stateFilePath, 'utf-8'));
       expect(snapshot.scope).toEqual({ type: 'from', target: 20 });
     });
@@ -1117,7 +1116,6 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       expect(result.success).toBe(false);
       expect(result.blockedIssues).toEqual([70]);
 
-      // Check emitted baton:blocked event
       expect(blockedEvents).toHaveLength(1);
       const event = blockedEvents[0];
       expect(event.evidence).toBeDefined();
@@ -1125,7 +1123,6 @@ describe('BatonRunner & Worker Prompt Construction', () => {
       expect(event.evidence.length).toBeLessThanOrEqual(30000);
       expect(event.evidence).toContain('FAIL test/sample.test.ts');
 
-      // Check githubService.reportBlocker call
       expect(mockGitHubService.reportBlocker).toHaveBeenCalledTimes(1);
       const blockerCall = mockGitHubService.reportBlocker.mock.calls[0][0];
       expect(blockerCall.evidence).not.toContain('\u001b[');

@@ -43,7 +43,7 @@ export async function watchCommand(
         const raw = fs.readFileSync(stateFilePath, 'utf-8');
         snapshot = JSON.parse(raw);
       } catch {
-        // ignore
+        // Tolerates concurrent write or partial JSON during state updates
       }
     }
 

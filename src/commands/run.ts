@@ -203,7 +203,6 @@ export async function runCommand(
       return;
     }
 
-    // Check if target is a parent issue
     let isParent = false;
     let childTargets: number[] = [];
     try {
@@ -221,7 +220,7 @@ export async function runCommand(
         }
       }
     } catch {
-      // Ignore error
+      // Non-fatal preflight probe failure: fallback to standard issue handling
     }
 
     if (isParent) {

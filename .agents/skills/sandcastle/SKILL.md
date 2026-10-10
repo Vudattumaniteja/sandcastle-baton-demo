@@ -15,6 +15,8 @@ Run a sequential GitHub issue baton where each issue is implemented in a complet
 
 If either is missing, request it before starting.
 
+> **Deep Modules Notice**: Packages are deep modules: see [src/packages/README.md](../../../src/packages/README.md) before adding or importing one.
+
 ---
 
 ## Issue Gate

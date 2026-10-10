@@ -27,7 +27,6 @@ program
   )
   .helpOption('-h, --help', 'Display help for command');
 
-// 0. wizard command
 program
   .command('wizard')
   .description('Launch the interactive guided Sandcastle baton wizard')
@@ -35,7 +34,6 @@ program
     await wizardCommand();
   });
 
-// 1. run command
 program
   .command('run [target]')
   .description('Run an autonomous issue baton loop')
@@ -89,7 +87,6 @@ program
     await runCommand(target, options);
   });
 
-// 2. status command
 program
   .command('status')
   .description('Display status snapshot of current or latest baton execution')
@@ -98,7 +95,6 @@ program
     await statusCommand(options);
   });
 
-// 3. doctor command
 program
   .command('doctor')
   .description('Validate workspace health, toolchain, and gate requirements')
@@ -107,7 +103,6 @@ program
     await doctorCommand(options);
   });
 
-// 4. config command
 const configCmd = program
   .command('config')
   .description('Manage Sandcastle 3-tier configuration')
@@ -139,7 +134,6 @@ configCmd
     configListCommand(options);
   });
 
-// 5. watch command
 program
   .command('watch')
   .description('Live alternate-screen terminal monitor streaming agent transcripts and progress')
@@ -153,7 +147,6 @@ program
     await watchCommand(options);
   });
 
-// 6. update command
 program
   .command('update')
   .description(

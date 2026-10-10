@@ -20,6 +20,14 @@
     },
     "./package.json": "./package.json"
   },
+  "imports": {
+    "#packages/state": "./src/packages/state/index.ts",
+    "#packages/github": "./src/packages/github/index.ts",
+    "#packages/worker-runtime": "./src/packages/worker-runtime/index.ts",
+    "#packages/orchestrator": "./src/packages/orchestrator/index.ts",
+    "#packages/terminal": "./src/packages/terminal/index.ts",
+    "#packages/diagnostics": "./src/packages/diagnostics/index.ts"
+  },
   "files": [
     "dist",
     "README.md",
@@ -28,9 +36,11 @@
   "scripts": {
     "build": "tsup",
     "build:verify": "node scripts/verify-build.mjs",
-    "typecheck": "tsc --noEmit",
+    "lint:boundaries": "depcruise src test",
+    "typecheck": "tsc --noEmit && npm run lint:boundaries",
     "test": "vitest run",
     "test:watch": "vitest",
+    "verify": "npm test && npm run lint:boundaries && npm run build && node scripts/verify-build.mjs",
     "prepack": "npm run build && npm run build:verify"
   },
   "dependencies": {
@@ -42,6 +52,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.13.4",
+    "dependency-cruiser": "^18.5.0",
     "tsup": "^8.3.6",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"

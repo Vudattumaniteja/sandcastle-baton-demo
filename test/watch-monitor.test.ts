@@ -23,7 +23,7 @@ describe('WatchMonitor', () => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch {
-      // ignore
+      // Tolerates ENOENT or file lock race during tmpDir cleanup
     }
   });
 
@@ -41,7 +41,7 @@ describe('WatchMonitor', () => {
 
     monitor.enterAlternateScreen();
     const entered = outputChunks.join('');
-    expect(entered).toContain('\x1b[?1049h'); // Enter alternate screen
+    expect(entered).toContain('\x1b[?1049h');
     expect(entered).toContain('\x1b[?25l');   // Hide cursor
 
     outputChunks.length = 0;

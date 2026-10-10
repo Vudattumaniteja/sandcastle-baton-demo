@@ -48,10 +48,8 @@ export async function wizardCommand(
       hitlLabels: resolvedConfig.hitlLabels,
     });
 
-  // 1. Intro Banner
   prompts.intro(pc.bold(pc.cyan('Sandcastle Autonomous Issue Baton Wizard')));
 
-  // 2. Preflight Validation
   const s = prompts.spinner();
   s.start('Running workspace and preflight diagnostics...');
   const doctorReport = await doctorService.runDiagnostics();
@@ -73,7 +71,6 @@ export async function wizardCommand(
 
   s.stop(pc.green('Preflight validation passed.'));
 
-  // 3. Issue Selection
   s.start('Fetching backlog issues & gating prerequisites...');
   const targetRepo = await githubService.getRepo();
   const openIssues = await githubService.listIssues({ state: 'open' });
@@ -212,7 +209,6 @@ export async function wizardCommand(
     parentContext = includeParent ? 'reference' : 'none';
   }
 
-  // 4. Model Selection
   s.start('Discovering available Antigravity models & quota...');
   const discoveredModels = await antigravityService.discoverModels();
   const statuslineSnapshot = await antigravityService.getStatuslineSnapshot();
@@ -235,7 +231,6 @@ export async function wizardCommand(
     return { cancelled: true };
   }
 
-  // 5. Reasoning Effort Selection
   const initialEffort = (configService.get('reasoningEffort') || 'high') as 'high' | 'medium' | 'low';
   const effortOptions = getReasoningEffortChoices();
   const selectedEffort = await prompts.select({
@@ -249,7 +244,6 @@ export async function wizardCommand(
     return { cancelled: true };
   }
 
-  // 6. Execution Mode Selection
   const modeOptions = getExecutionModeChoices();
   const selectedMode = await prompts.select({
     message: 'Select execution mode:',
@@ -262,7 +256,6 @@ export async function wizardCommand(
     return { cancelled: true };
   }
 
-  // 7. Launch Manifest Note Card & Confirmation
   let branch = 'main';
   const gitBranchCheck = doctorReport.checks.find((c) => c.id === 'git');
   const branchMatch = gitBranchCheck?.message.match(
@@ -305,7 +298,6 @@ export async function wizardCommand(
     return { cancelled: true, manifest };
   }
 
-  // 8. Dynamic Execution with Multi-Phase Spinners
   const runnerOptions: BatonRunnerOptions = {
     repo: manifest.repo,
     issues: manifest.issues,

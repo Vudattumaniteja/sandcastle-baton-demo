@@ -345,7 +345,7 @@ describe('UI Formatters & Badges (Variant A TUI Flow)', () => {
           'gemini-3.7-pro': {
             remaining_fraction: 0.50,
             reset_time: '2026-08-21T12:20:00.000Z', // 20m in future
-            reset_in_seconds: 60, // Stale seconds
+            reset_in_seconds: 60,
           },
         },
       };

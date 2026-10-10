@@ -164,7 +164,7 @@ gemini-3.8-flash-medium\tGemini 3.8 Flash (Medium)
           'gemini-5h': {
             remaining_fraction: 0.85,
             reset_time: futureResetTime,
-            reset_in_seconds: 120, // Stale seconds on disk
+            reset_in_seconds: 120,
           },
         },
         agent_state: 'working',
@@ -243,7 +243,7 @@ gemini-3.8-flash-medium\tGemini 3.8 Flash (Medium)
       const activeInfo = {
         remaining_fraction: 0.45,
         reset_time: '2026-08-21T12:15:30.000Z', // 15m 30s in the future (930s)
-        reset_in_seconds: 10, // Stale seconds
+        reset_in_seconds: 10,
       };
 
       const normalized = normalizeQuotaInfo(activeInfo, now);

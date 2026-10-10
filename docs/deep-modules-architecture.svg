@@ -1,0 +1,233 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="100%" height="100%" style="background:#0d1117; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#388bfd" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#1f6feb" stop-opacity="0.03"/>
+    </linearGradient>
+    <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f0883e" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#bd561d" stop-opacity="0.03"/>
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3fb950" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#238636" stop-opacity="0.03"/>
+    </linearGradient>
+    <linearGradient id="redGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f85149" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#da3633" stop-opacity="0.03"/>
+    </linearGradient>
+    <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#bc8cff" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#8957e5" stop-opacity="0.03"/>
+    </linearGradient>
+    <linearGradient id="yellowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#d29922" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#9e6a03" stop-opacity="0.03"/>
+    </linearGradient>
+    <filter id="glow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="0" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Title & Subtitle Header -->
+  <g transform="translate(60, 45)">
+    <text x="0" y="0" fill="#f0f6fc" font-size="24" font-weight="bold" letter-spacing="0.5">SANDCASTLE DEEP MODULE ARCHITECTURE</text>
+    <text x="0" y="24" fill="#8b949e" font-size="13">Small Interface (Public Entry Points) on Top  •  Deep Behavior (Private lib/) Hidden Inside</text>
+    <rect x="910" y="-18" width="170" height="28" rx="6" fill="#238636" fill-opacity="0.2" stroke="#3fb950" stroke-width="1.2"/>
+    <text x="925" y="0" fill="#3fb950" font-size="11" font-weight="bold">ENFORCED IN CI: 0 VIOLATIONS</text>
+  </g>
+
+  <!-- ================= MODULE 1: ORCHESTRATOR (Blue - Top Left) ================= -->
+  <g transform="translate(60, 95)" filter="url(#glow)">
+    <!-- Container Body -->
+    <rect x="0" y="0" width="480" height="340" rx="12" fill="url(#blueGrad)" stroke="#388bfd" stroke-width="2.5"/>
+    <!-- Top Seam / Interface Bar -->
+    <rect x="0" y="0" width="480" height="42" rx="12" fill="#1f6feb" fill-opacity="0.25" stroke="#388bfd" stroke-width="2.5"/>
+    <line x1="0" y1="42" x2="480" y2="42" stroke="#388bfd" stroke-width="2.5"/>
+    <!-- Interface Label -->
+    <text x="18" y="26" fill="#79c0ff" font-size="14" font-weight="bold">orchestrator</text>
+    <text x="150" y="26" fill="#8b949e" font-size="11">PUBLIC ENTRY POINTS: index.ts • gating.ts • prompt.ts</text>
+    <!-- Public API Badge -->
+    <rect x="360" y="10" width="105" height="22" rx="4" fill="#388bfd" fill-opacity="0.2"/>
+    <text x="372" y="25" fill="#58a6ff" font-size="10" font-weight="bold">EVENT EMITTER</text>
+
+    <!-- Hidden Implementation Volume (lib/) -->
+    <g transform="translate(20, 62)">
+      <text x="0" y="0" fill="#58a6ff" font-size="11" font-weight="bold">PRIVATE IMPLEMENTATION (lib/)</text>
+      <text x="210" y="0" fill="#8b949e" font-size="10">Hidden from outside callers</text>
+
+      <rect x="0" y="14" width="440" height="52" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+      <text x="14" y="35" fill="#f0f6fc" font-size="12" font-weight="600">lib/queue-builder.ts</text>
+      <text x="14" y="52" fill="#8b949e" font-size="10">Resolves --from, --only, and --all scope queues in ascending issue order</text>
+
+      <rect x="0" y="74" width="440" height="52" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+      <text x="14" y="95" fill="#f0f6fc" font-size="12" font-weight="600">lib/dependency-parser.ts</text>
+      <text x="14" y="112" fill="#8b949e" font-size="10">Parses 'Blocked by #N', 'Depends on #N', and markdown checklist boxes</text>
+
+      <rect x="0" y="134" width="440" height="52" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+      <text x="14" y="155" fill="#f0f6fc" font-size="12" font-weight="600">lib/prompt-interpolator.ts</text>
+      <text x="14" y="172" fill="#8b949e" font-size="10">4-tier mustache variable resolution and automatic retry error injection</text>
+
+      <rect x="0" y="194" width="440" height="52" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+      <text x="14" y="215" fill="#f0f6fc" font-size="12" font-weight="600">lib/handoff-calculator.ts</text>
+      <text x="14" y="232" fill="#8b949e" font-size="10">Computes synthetic contract phase durations and next target previews</text>
+    </g>
+  </g>
+
+  <!-- ================= MODULE 2: WORKER-RUNTIME (Orange - Top Right) ================= -->
+  <g transform="translate(560, 95)" filter="url(#glow)">
+    <rect x="0" y="0" width="580" height="180" rx="12" fill="url(#orangeGrad)" stroke="#f0883e" stroke-width="2.5"/>
+    <rect x="0" y="0" width="580" height="42" rx="12" fill="#bd561d" fill-opacity="0.25" stroke="#f0883e" stroke-width="2.5"/>
+    <line x1="0" y1="42" x2="580" y2="42" stroke="#f0883e" stroke-width="2.5"/>
+
+    <text x="18" y="26" fill="#ffa657" font-size="14" font-weight="bold">worker-runtime</text>
+    <text x="160" y="26" fill="#8b949e" font-size="11">ENTRY POINTS: index.ts • models.ts • transcript.ts • quota.ts</text>
+    <rect x="470" y="10" width="95" height="22" rx="4" fill="#f0883e" fill-opacity="0.2"/>
+    <text x="480" y="25" fill="#ffa657" font-size="10" font-weight="bold">SUPERVISOR</text>
+
+    <g transform="translate(20, 58)">
+      <text x="0" y="0" fill="#ffa657" font-size="11" font-weight="bold">PRIVATE IMPLEMENTATION (lib/)</text>
+      <g transform="translate(0, 10)">
+        <rect x="0" y="0" width="265" height="46" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+        <text x="10" y="19" fill="#f0f6fc" font-size="11" font-weight="600">lib/process-spawner.ts</text>
+        <text x="10" y="34" fill="#8b949e" font-size="9">execa worker spawner &amp; stdio pipes</text>
+
+        <rect x="275" y="0" width="265" height="46" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+        <text x="285" y="19" fill="#f0f6fc" font-size="11" font-weight="600">lib/quota-evaluator.ts</text>
+        <text x="285" y="34" fill="#8b949e" font-size="9">HTTP 429 &amp; rate limit decay math</text>
+
+        <rect x="0" y="54" width="265" height="46" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+        <text x="10" y="73" fill="#f0f6fc" font-size="11" font-weight="600">lib/signal-trap.ts</text>
+        <text x="10" y="88" fill="#8b949e" font-size="9">SIGINT/SIGTERM cursor recovery</text>
+
+        <rect x="275" y="54" width="265" height="46" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+        <text x="285" y="73" fill="#f0f6fc" font-size="11" font-weight="600">lib/transcript-reader.ts</text>
+        <text x="285" y="88" fill="#8b949e" font-size="9">Byte-offset JSONL thought tailer</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ================= MODULE 3: GITHUB (Green - Mid Right) ================= -->
+  <g transform="translate(560, 295)" filter="url(#glow)">
+    <rect x="0" y="0" width="580" height="180" rx="12" fill="url(#greenGrad)" stroke="#3fb950" stroke-width="2.5"/>
+    <rect x="0" y="0" width="580" height="42" rx="12" fill="#238636" fill-opacity="0.25" stroke="#3fb950" stroke-width="2.5"/>
+    <line x1="0" y1="42" x2="580" y2="42" stroke="#3fb950" stroke-width="2.5"/>
+
+    <text x="18" y="26" fill="#7ee787" font-size="14" font-weight="bold">github</text>
+    <text x="85" y="26" fill="#8b949e" font-size="11">PUBLIC ENTRY POINT: index.ts (GitHubClient)</text>
+    <rect x="470" y="10" width="95" height="22" rx="4" fill="#3fb950" fill-opacity="0.2"/>
+    <text x="480" y="25" fill="#7ee787" font-size="10" font-weight="bold">CLI ADAPTER</text>
+
+    <g transform="translate(20, 58)">
+      <text x="0" y="0" fill="#7ee787" font-size="11" font-weight="bold">PRIVATE IMPLEMENTATION (lib/)</text>
+      <g transform="translate(0, 10)">
+        <rect x="0" y="0" width="265" height="46" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+        <text x="10" y="19" fill="#f0f6fc" font-size="11" font-weight="600">lib/cli-executor.ts</text>
+        <text x="10" y="34" fill="#8b949e" font-size="9">gh CLI child processes &amp; signals</text>
+
+        <rect x="275" y="0" width="265" height="46" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+        <text x="285" y="19" fill="#f0f6fc" font-size="11" font-weight="600">lib/evidence-sanitizer.ts</text>
+        <text x="285" y="34" fill="#8b949e" font-size="9">stripAnsi &amp; 30KB payload truncation</text>
+
+        <rect x="0" y="54" width="265" height="46" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+        <text x="10" y="73" fill="#f0f6fc" font-size="11" font-weight="600">lib/checklist-sync.ts</text>
+        <text x="10" y="88" fill="#8b949e" font-size="9">Auto-check - [ ] #N task boxes</text>
+
+        <rect x="275" y="54" width="265" height="46" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+        <text x="285" y="73" fill="#f0f6fc" font-size="11" font-weight="600">lib/comment-builder.ts</text>
+        <text x="285" y="88" fill="#8b949e" font-size="9">Markdown blocker &amp; progress reports</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ================= MODULE 4: STATE (Red - Bottom Left) ================= -->
+  <g transform="translate(60, 455)" filter="url(#glow)">
+    <rect x="0" y="0" width="480" height="380" rx="12" fill="url(#redGrad)" stroke="#f85149" stroke-width="2.5"/>
+    <rect x="0" y="0" width="480" height="42" rx="12" fill="#da3633" fill-opacity="0.25" stroke="#f85149" stroke-width="2.5"/>
+    <line x1="0" y1="42" x2="480" y2="42" stroke="#f85149" stroke-width="2.5"/>
+
+    <text x="18" y="26" fill="#ff7b72" font-size="14" font-weight="bold">state</text>
+    <text x="75" y="26" fill="#8b949e" font-size="11">ENTRY POINTS: index.ts • memory.ts (RunState &amp; Config)</text>
+    <rect x="360" y="10" width="105" height="22" rx="4" fill="#f85149" fill-opacity="0.2"/>
+    <text x="372" y="25" fill="#ff7b72" font-size="10" font-weight="bold">PERSISTENCE</text>
+
+    <g transform="translate(20, 62)">
+      <text x="0" y="0" fill="#ff7b72" font-size="11" font-weight="bold">PRIVATE IMPLEMENTATION (lib/)</text>
+      <text x="210" y="0" fill="#8b949e" font-size="10">Atomic disk &amp; in-memory adapters</text>
+
+      <rect x="0" y="14" width="440" height="60" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+      <text x="14" y="37" fill="#f0f6fc" font-size="12" font-weight="600">lib/atomic-file.ts</text>
+      <text x="14" y="55" fill="#8b949e" font-size="10">Write to .tmp then rename. Prevents corrupted JSON during watch polling</text>
+
+      <rect x="0" y="86" width="440" height="60" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+      <text x="14" y="109" fill="#f0f6fc" font-size="12" font-weight="600">lib/config-merger.ts</text>
+      <text x="14" y="127" fill="#8b949e" font-size="10">3-tier resolution: CLI flags > local .sandcastle > global ~/.sandcastle > defaults</text>
+
+      <rect x="0" y="158" width="440" height="60" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+      <text x="14" y="181" fill="#f0f6fc" font-size="12" font-weight="600">lib/paths.ts</text>
+      <text x="14" y="199" fill="#8b949e" font-size="10">Multi-platform path resolution for Windows and Unix home directories</text>
+
+      <!-- Seam Highlight -->
+      <rect x="0" y="230" width="440" height="64" rx="6" fill="#da3633" fill-opacity="0.1" stroke="#f85149" stroke-width="1"/>
+      <text x="14" y="253" fill="#ff7b72" font-size="12" font-weight="bold">TEST SEAM: memory.ts</text>
+      <text x="14" y="271" fill="#f0f6fc" font-size="10">InMemoryRunStateStore &amp; InMemoryConfigStore allow 100% in-memory test runs</text>
+    </g>
+  </g>
+
+  <!-- ================= MODULE 5: TERMINAL (Purple - Mid-Bottom Right) ================= -->
+  <g transform="translate(560, 495)" filter="url(#glow)">
+    <rect x="0" y="0" width="580" height="210" rx="12" fill="url(#purpleGrad)" stroke="#bc8cff" stroke-width="2.5"/>
+    <rect x="0" y="0" width="580" height="42" rx="12" fill="#8957e5" fill-opacity="0.25" stroke="#bc8cff" stroke-width="2.5"/>
+    <line x1="0" y1="42" x2="580" y2="42" stroke="#bc8cff" stroke-width="2.5"/>
+
+    <text x="18" y="26" fill="#d2a8ff" font-size="14" font-weight="bold">terminal</text>
+    <text x="100" y="26" fill="#8b949e" font-size="11">ENTRY POINTS: index.ts • monitor.ts • transition.ts</text>
+    <rect x="470" y="10" width="95" height="22" rx="4" fill="#bc8cff" fill-opacity="0.2"/>
+    <text x="480" y="25" fill="#d2a8ff" font-size="10" font-weight="bold">PRESENTATION</text>
+
+    <g transform="translate(20, 58)">
+      <text x="0" y="0" fill="#d2a8ff" font-size="11" font-weight="bold">PRIVATE IMPLEMENTATION (lib/)</text>
+      <g transform="translate(0, 10)">
+        <rect x="0" y="0" width="265" height="56" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+        <text x="10" y="22" fill="#f0f6fc" font-size="11" font-weight="600">lib/alternate-screen.ts</text>
+        <text x="10" y="40" fill="#8b949e" font-size="9">Raw TUI buffer (\x1b[?1049h) &amp; cursor controls</text>
+
+        <rect x="275" y="0" width="265" height="56" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+        <text x="285" y="22" fill="#f0f6fc" font-size="11" font-weight="600">lib/keypress-listener.ts</text>
+        <text x="285" y="40" fill="#8b949e" font-size="9">Raw mode stdin key listeners (q, space, r)</text>
+
+        <rect x="0" y="68" width="265" height="56" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+        <text x="10" y="90" fill="#f0f6fc" font-size="11" font-weight="600">lib/ansi-progress.ts</text>
+        <text x="10" y="108" fill="#8b949e" font-size="9">Unified duration &amp; progress bar formatting</text>
+
+        <rect x="275" y="68" width="265" height="56" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+        <text x="285" y="90" fill="#f0f6fc" font-size="11" font-weight="600">lib/layout-calculator.ts</text>
+        <text x="285" y="108" fill="#8b949e" font-size="9">Responsive card widths &amp; terminal padding</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ================= MODULE 6: DIAGNOSTICS (Yellow - Bottom Right) ================= -->
+  <g transform="translate(560, 725)" filter="url(#glow)">
+    <rect x="0" y="0" width="580" height="110" rx="12" fill="url(#yellowGrad)" stroke="#d29922" stroke-width="2.5"/>
+    <rect x="0" y="0" width="580" height="38" rx="12" fill="#9e6a03" fill-opacity="0.25" stroke="#d29922" stroke-width="2.5"/>
+    <line x1="0" y1="38" x2="580" y2="38" stroke="#d29922" stroke-width="2.5"/>
+
+    <text x="18" y="24" fill="#e3b341" font-size="14" font-weight="bold">diagnostics</text>
+    <text x="130" y="24" fill="#8b949e" font-size="11">ENTRY POINT: index.ts (DoctorEngine • UpdateEngine)</text>
+    <rect x="470" y="8" width="95" height="22" rx="4" fill="#d29922" fill-opacity="0.2"/>
+    <text x="488" y="23" fill="#e3b341" font-size="10" font-weight="bold">HEALTH</text>
+
+    <g transform="translate(20, 50)">
+      <rect x="0" y="0" width="265" height="44" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+      <text x="10" y="18" fill="#f0f6fc" font-size="11" font-weight="600">lib/doctor-probes.ts</text>
+      <text x="10" y="32" fill="#8b949e" font-size="9">Node, git worktree, gh auth, agy CLI probes</text>
+
+      <rect x="275" y="0" width="265" height="44" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+      <text x="285" y="18" fill="#f0f6fc" font-size="11" font-weight="600">lib/workflow-template.ts</text>
+      <text x="285" y="32" fill="#8b949e" font-size="9">Embedded GitHub Actions CI baton workflow</text>
+    </g>
+  </g>
+
+</svg>

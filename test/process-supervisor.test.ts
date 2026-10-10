@@ -431,7 +431,7 @@ describe('ProcessSupervisor', () => {
           'gemini-5h': {
             remaining_fraction: 0,
             reset_time: '2026-08-21T11:50:00.000Z', // Expired 10m ago
-            reset_in_seconds: 60, // Stale seconds
+            reset_in_seconds: 60,
           },
           'gemini-weekly': {
             remaining_fraction: 0,

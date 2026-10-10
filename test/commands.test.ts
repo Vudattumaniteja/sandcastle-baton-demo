@@ -365,7 +365,6 @@ describe('POSIX Headless Commands (doctor, status, config, run)', () => {
     });
 
     it('should validate mutually exclusive options and fail fast with exit code 1', async () => {
-      // 1. positional target + --only
       await runCommand('42', { only: '45' });
       expect(processExitSpy).toHaveBeenCalledWith(1);
       expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Cannot specify both positional target and --only'));
@@ -373,7 +372,6 @@ describe('POSIX Headless Commands (doctor, status, config, run)', () => {
       processExitSpy.mockClear();
       consoleErrorSpy.mockClear();
 
-      // 2. --from + --only
       await runCommand(undefined, { from: '42', only: '45' });
       expect(processExitSpy).toHaveBeenCalledWith(1);
       expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Cannot specify both --from and --only'));
@@ -381,7 +379,6 @@ describe('POSIX Headless Commands (doctor, status, config, run)', () => {
       processExitSpy.mockClear();
       consoleErrorSpy.mockClear();
 
-      // 3. positional target + --from
       await runCommand('42', { from: '45' });
       expect(processExitSpy).toHaveBeenCalledWith(1);
       expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Cannot specify both positional target and --from'));
@@ -389,7 +386,6 @@ describe('POSIX Headless Commands (doctor, status, config, run)', () => {
       processExitSpy.mockClear();
       consoleErrorSpy.mockClear();
 
-      // 4. positional target + --all
       await runCommand('42', { all: true });
       expect(processExitSpy).toHaveBeenCalledWith(1);
       expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Cannot specify both positional target and --all'));
@@ -397,7 +393,6 @@ describe('POSIX Headless Commands (doctor, status, config, run)', () => {
       processExitSpy.mockClear();
       consoleErrorSpy.mockClear();
 
-      // 5. --from + --all
       await runCommand(undefined, { from: '42', all: true });
       expect(processExitSpy).toHaveBeenCalledWith(1);
       expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Cannot specify both --from and --all'));
@@ -405,7 +400,6 @@ describe('POSIX Headless Commands (doctor, status, config, run)', () => {
       processExitSpy.mockClear();
       consoleErrorSpy.mockClear();
 
-      // 6. --only + --all
       await runCommand(undefined, { only: '42', all: true });
       expect(processExitSpy).toHaveBeenCalledWith(1);
       expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Cannot specify both --only and --all'));
@@ -433,7 +427,6 @@ describe('POSIX Headless Commands (doctor, status, config, run)', () => {
     });
 
     it('should fail fast on invalid numbers provided for positional, --from, or --only', async () => {
-      // Invalid positional
       await runCommand('abc', {});
       expect(processExitSpy).toHaveBeenCalledWith(1);
       expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid positional issue target'));
