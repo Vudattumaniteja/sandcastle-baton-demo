@@ -28,8 +28,8 @@ export function buildBlockerComment(options: BlockerReportOptions): string {
 export function buildParentProgressComment(options: ParentProgressCommentOptions): string {
   const titleText = options.childTitle ? ` - ${options.childTitle}` : '';
   const changesText = options.changes ?? `Completed implementation for issue #${options.childNumber}.`;
-  const verificationText = options.verification ?? `All local test suites and linters passed (100% green).`;
-  const testingNotesText = options.testingNotes ?? `Automated verification executed with 0 failures.`;
+  const verificationText = options.verification ?? 'No automated verification telemetry recorded.';
+  const testingNotesText = options.testingNotes ?? 'No automated verification telemetry recorded.';
 
   return [
     `## 📋 Child Issue Completed: #${options.childNumber}${titleText}`,
@@ -47,3 +47,5 @@ export function buildParentProgressComment(options: ParentProgressCommentOptions
     '_Sandcastle autonomous parent progress synchronization._',
   ].join('\n');
 }
+
+export const buildProgressComment = buildParentProgressComment;

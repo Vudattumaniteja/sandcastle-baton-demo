@@ -12,7 +12,6 @@ import {
   probeGhAuth,
   probeAgyCli,
   probeWorkspaceAssets,
-  probePowerShellAlias,
 } from '#packages/diagnostics';
 
 describe('packages/diagnostics', () => {
@@ -39,7 +38,7 @@ describe('packages/diagnostics', () => {
     });
 
     it('should probe git workspace when in git repo', async () => {
-      const mockExecutor = vi.fn().mockImplementation((file, args) => {
+      const mockExecutor = vi.fn().mockImplementation((_file, args) => {
         if (args.includes('--is-inside-work-tree')) {
           return Promise.resolve({ stdout: 'true\n', stderr: '', exitCode: 0 });
         }
@@ -86,7 +85,7 @@ describe('packages/diagnostics', () => {
       fs.writeFileSync(path.join(tempDir, 'CONTEXT.md'), '# Context');
       fs.writeFileSync(path.join(tempDir, 'AGENTS.md'), '# Agents');
 
-      const mockExecutor = vi.fn().mockImplementation((file, args) => {
+      const mockExecutor = vi.fn().mockImplementation((file, _args) => {
         if (file === 'git') {
           return Promise.resolve({ stdout: 'true\n', stderr: '', exitCode: 0 });
         }
@@ -118,7 +117,7 @@ describe('packages/diagnostics', () => {
     });
 
     it('should execute check mode via UpdateEngine without mutating files', async () => {
-      const mockExecutor = vi.fn().mockImplementation((file, args) => {
+      const mockExecutor = vi.fn().mockImplementation((_file, args) => {
         if (args.includes('--is-inside-work-tree')) {
           return Promise.resolve({ stdout: 'true\n', stderr: '', exitCode: 0 });
         }

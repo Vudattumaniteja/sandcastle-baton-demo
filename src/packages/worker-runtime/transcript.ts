@@ -45,7 +45,6 @@ export interface TranscriptStats {
 export type TranscriptSummary = TranscriptStats;
 
 export class TranscriptTailer extends EventEmitter {
-  private options: TranscriptTailerOptions;
   private filePath?: string;
   private appDataDir: string;
   private pollIntervalMs: number;
@@ -62,7 +61,6 @@ export class TranscriptTailer extends EventEmitter {
 
   constructor(options: TranscriptTailerOptions = {}) {
     super();
-    this.options = options;
     this.filePath = options.filePath;
     this.conversationId = options.conversationId;
     this.pollIntervalMs = options.pollIntervalMs ?? 300;

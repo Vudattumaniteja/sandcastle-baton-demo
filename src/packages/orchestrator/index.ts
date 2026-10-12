@@ -16,13 +16,8 @@ import { RunStateStore, ConfigStore } from '#packages/state';
 import { GatingEngine } from './gating.js';
 import { PromptEngine } from './prompt.js';
 import { resolveExecutionQueue, resolveExecutionScope } from './lib/queue-builder.js';
-import { assembleHandoffPayload, calculatePhaseBreakdown } from './lib/handoff-calculator.js';
-import {
-  parseParentReferences,
-  parsePrerequisites,
-  parseAcceptanceCriteria,
-} from './lib/dependency-parser.js';
-import { interpolatePrompt } from './lib/prompt-interpolator.js';
+import { assembleHandoffPayload } from './lib/handoff-calculator.js';
+import { parseAcceptanceCriteria } from './lib/dependency-parser.js';
 
 export {
   GatingEngine,
@@ -83,17 +78,12 @@ export interface BatonOrchestratorOptions extends Omit<Partial<SandcastleConfig>
   cwd?: string;
   stateFilePath?: string;
   signal?: AbortSignal;
-  githubClient?: any;
-  workerSupervisor?: any;
-  runStateStore?: any;
-  configStore?: any;
-  gatingEngine?: any;
-  promptEngine?: any;
-  githubService?: any;
-  processSupervisor?: any;
-  gatingEvaluator?: any;
-  configService?: any;
-  promptTemplateEngine?: any;
+  githubClient?: GitHubClient | any;
+  workerSupervisor?: WorkerSupervisor | any;
+  runStateStore?: RunStateStore | any;
+  configStore?: ConfigStore | any;
+  gatingEngine?: GatingEngine | any;
+  promptEngine?: PromptEngine | any;
   // Optional non-UI handoff action hook
   handoffHandler?: (
     payload: BatonHandoffPayload
@@ -102,12 +92,12 @@ export interface BatonOrchestratorOptions extends Omit<Partial<SandcastleConfig>
 
 export class BatonOrchestrator extends EventEmitter {
   protected options: BatonOrchestratorOptions;
-  protected githubClient: any;
-  protected workerSupervisor: any;
-  protected runStateStore: RunStateStore;
-  protected configStore: any;
-  protected gatingEngine: GatingEngine;
-  protected promptEngine: PromptEngine;
+  protected githubClient: GitHubClient | any;
+  protected workerSupervisor: WorkerSupervisor | any;
+  protected runStateStore: RunStateStore | any;
+  protected configStore: ConfigStore | any;
+  protected gatingEngine: GatingEngine | any;
+  protected promptEngine: PromptEngine | any;
   protected cwd: string;
 
   constructor(options: BatonOrchestratorOptions = {}) {
@@ -118,19 +108,20 @@ export class BatonOrchestrator extends EventEmitter {
 
     this.configStore =
       options.configStore ??
-      options.configService ??
       new ConfigStore({ cwd });
 
     this.githubClient =
       options.githubClient ??
-      options.githubService ??
       new GitHubClient({ repo: options.repo });
 
-    const resolvedConfig = this.configStore.resolve(options);
+    const configOverrides: Partial<SandcastleConfig> = {
+      ...options,
+      timeout: options.timeout !== undefined ? String(options.timeout) : undefined,
+    };
+    const resolvedConfig = this.configStore.resolve(configOverrides);
 
     this.workerSupervisor =
       options.workerSupervisor ??
-      options.processSupervisor ??
       new WorkerSupervisor({
         maxRetries: options.retries ?? resolvedConfig.retries ?? 2,
       });
@@ -144,7 +135,6 @@ export class BatonOrchestrator extends EventEmitter {
 
     this.gatingEngine =
       options.gatingEngine ??
-      options.gatingEvaluator ??
       new GatingEngine({
         githubClient: this.githubClient,
         parentLabels: resolvedConfig.parentLabels,
@@ -153,7 +143,6 @@ export class BatonOrchestrator extends EventEmitter {
 
     this.promptEngine =
       options.promptEngine ??
-      options.promptTemplateEngine ??
       new PromptEngine({ cwd });
   }
 
@@ -187,7 +176,11 @@ export class BatonOrchestrator extends EventEmitter {
    */
   async run(): Promise<BatonFinishPayload> {
     const startTime = Date.now();
-    const config = this.configStore.resolve(this.options);
+    const configOverrides: Partial<SandcastleConfig> = {
+      ...this.options,
+      timeout: this.options.timeout !== undefined ? String(this.options.timeout) : undefined,
+    };
+    const config = this.configStore.resolve(configOverrides);
     const targetRepo = await this.githubClient.getRepo(config.repo || this.options.repo);
     const mode = (this.options.mode || config.mode || 'afk') as
       | 'afk'
@@ -273,7 +266,11 @@ export class BatonOrchestrator extends EventEmitter {
       this.emit('baton:gating', { issueNumber, evaluation });
 
       if (evaluation.status === 'PARENT' || evaluation.status === 'HITL') {
-        console.log(`[SKIP] Skipping parent/HITL issue #${issueNumber}`);
+        this.emit('phase:skipped', {
+          issueNumber,
+          status: evaluation.status,
+          reason: `Skipping ${evaluation.status} issue #${issueNumber}`,
+        });
         processedIssues.push({
           number: issueNumber,
           title: issue.title,
@@ -750,7 +747,7 @@ export class BatonOrchestrator extends EventEmitter {
         number: currentIssue.number,
         title: currentIssue.title,
         durationMs: currentDurationMs,
-        prNumber: currentIssue.number,
+        prNumber: currentIssue.prNumber,
         branchName: branchName || `issue-${currentIssue.number}-worker`,
       },
       nextIssue: {
@@ -761,7 +758,7 @@ export class BatonOrchestrator extends EventEmitter {
           typeof l === 'string' ? l : l.name || ''
         ),
         parentIssue: nextParentInfo,
-        model: this.options.model ?? config.model ?? 'gemini-3.7-flash',
+        model: this.options.model ?? config.model ?? 'gemini-2.5-flash',
         reasoningEffort:
           this.options.reasoningEffort ?? config.reasoningEffort ?? 'high',
         acceptanceCriteria: parseAcceptanceCriteria(nextIssue?.body || ''),

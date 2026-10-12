@@ -39,7 +39,9 @@ export interface CreatePullRequestOptions {
 
 export interface MergePullRequestOptions {
   method?: 'merge' | 'squash' | 'rebase';
+  strategy?: 'merge' | 'squash' | 'rebase';
   auto?: boolean;
+  autoMerge?: boolean;
   deleteBranch?: boolean;
   repo?: string;
 }

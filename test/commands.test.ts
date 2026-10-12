@@ -6,14 +6,12 @@ import { doctorCommand } from '../src/commands/doctor.js';
 import { statusCommand } from '../src/commands/status.js';
 import { configGetCommand, configSetCommand, configListCommand } from '../src/commands/config.js';
 import { runCommand } from '../src/commands/run.js';
-import { GitHubService } from '../src/services/github-service.js';
+import { GitHubClient } from '#packages/github';
 import type { BatonRunSnapshot } from '../src/types/baton.js';
 
 describe('POSIX Headless Commands (doctor, status, config, run)', () => {
   let tempDir: string;
   let runJsonPath: string;
-  let localConfigPath: string;
-  let globalConfigPath: string;
   let consoleLogSpy: any;
   let consoleErrorSpy: any;
   let processExitSpy: any;
@@ -23,14 +21,12 @@ describe('POSIX Headless Commands (doctor, status, config, run)', () => {
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sandcastle-cmd-test-'));
     runJsonPath = path.join(tempDir, '.sandcastle', 'run.json');
-    localConfigPath = path.join(tempDir, '.sandcastle', 'config.json');
-    globalConfigPath = path.join(tempDir, 'global', 'config.json');
 
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     processExitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
-    getRepoSpy = vi.spyOn(GitHubService.prototype, 'getRepo').mockResolvedValue('owner/repo');
-    getIssueSpy = vi.spyOn(GitHubService.prototype, 'getIssue').mockResolvedValue(null);
+    getRepoSpy = vi.spyOn(GitHubClient.prototype, 'getRepo').mockResolvedValue('owner/repo');
+    getIssueSpy = vi.spyOn(GitHubClient.prototype, 'getIssue').mockResolvedValue(null);
   });
 
   afterEach(() => {

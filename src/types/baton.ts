@@ -82,6 +82,7 @@ export type BatonEventMap = {
   'baton:blocked': (payload: BatonBlockedPayload) => void;
   'baton:finish': (payload: BatonFinishPayload) => void;
   'baton:handoff': (payload: BatonHandoffPayload) => void;
+  'phase:skipped': (payload: { issueNumber: number; reason: string; status?: string }) => void;
 };
 
 export interface ProcessedIssueSummary {

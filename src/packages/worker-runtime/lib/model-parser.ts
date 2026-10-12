@@ -12,51 +12,33 @@ export interface ModelInfo {
 
 export const FALLBACK_MODELS: ModelInfo[] = [
   {
-    id: 'Gemini 3.8 Flash',
-    name: 'Gemini 3.8 Flash',
-    aliases: ['3.8-flash', 'gemini-3.8-flash'],
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    aliases: ['2.5-flash', 'flash', 'gemini-flash', 'gemini-2.5-flash'],
     isDefault: true,
   },
   {
-    id: 'Gemini 3.7 Flash',
-    name: 'Gemini 3.7 Flash',
-    aliases: ['3.7-flash', 'flash', 'gemini-3.7-flash'],
+    id: 'gemini-2.5-pro',
+    name: 'Gemini 2.5 Pro',
+    aliases: ['2.5-pro', 'pro', 'gemini-pro', 'gemini-2.5-pro'],
     isDefault: false,
   },
   {
-    id: 'Gemini 3.1 Pro',
-    name: 'Gemini 3.1 Pro',
-    aliases: ['3.1-pro', 'pro', 'gemini-3.1-pro'],
+    id: 'claude-3-7-sonnet',
+    name: 'Claude 3.7 Sonnet',
+    aliases: ['claude-3.7', 'claude-3-7', 'claude-3.7-sonnet', 'claude-sonnet', 'sonnet'],
     isDefault: false,
   },
   {
-    id: 'Gemini 3.6 Flash',
-    name: 'Gemini 3.6 Flash',
-    aliases: ['3.6-flash', 'gemini-3.6-flash'],
+    id: 'claude-3-5-sonnet',
+    name: 'Claude 3.5 Sonnet',
+    aliases: ['claude-3.5', 'claude-3-5', 'claude-3.5-sonnet'],
     isDefault: false,
   },
   {
-    id: 'Gemini 3.5 Flash',
-    name: 'Gemini 3.5 Flash',
-    aliases: ['3.5-flash', 'gemini-3.5-flash'],
-    isDefault: false,
-  },
-  {
-    id: 'Claude Sonnet 4.6 (Thinking)',
-    name: 'Claude Sonnet 4.6 (Thinking)',
-    aliases: ['claude-sonnet', 'sonnet', 'claude-3.7-sonnet'],
-    isDefault: false,
-  },
-  {
-    id: 'Claude Opus 4.6 (Thinking)',
-    name: 'Claude Opus 4.6 (Thinking)',
-    aliases: ['claude-opus', 'opus'],
-    isDefault: false,
-  },
-  {
-    id: 'GPT-OSS 120B (Medium)',
-    name: 'GPT-OSS 120B (Medium)',
-    aliases: ['gpt-oss', 'gpt-120b'],
+    id: 'gpt-4o',
+    name: 'GPT-4o',
+    aliases: ['4o', 'gpt-4', 'chatgpt-4o'],
     isDefault: false,
   },
 ];
@@ -66,99 +48,74 @@ export const FALLBACK_MODELS: ModelInfo[] = [
  */
 export function resolveModel(modelName?: string, effort?: string): string {
   if (!modelName) {
-    if (effort === 'medium') return 'Gemini 3.8 Flash (Medium)';
-    if (effort === 'low') return 'Gemini 3.8 Flash (Low)';
-    return 'Gemini 3.8 Flash (High)';
+    return 'gemini-2.5-flash';
   }
 
   const trimmed = modelName.trim();
-
-  // If already exact model with parenthesized effort/mode, check if it needs effort override or return as is
-  if (/\([^)]+\)$/.test(trimmed)) {
-    if (
-      effort &&
-      (trimmed.startsWith('Gemini 3.8 Flash') ||
-        trimmed.startsWith('Gemini 3.7 Flash') ||
-        trimmed.startsWith('Gemini 3.6 Flash') ||
-        trimmed.startsWith('Gemini 3.5 Flash'))
-    ) {
-      const prefix = trimmed.replace(/\s*\([^)]+\)$/, '');
-      const eff =
-        effort === 'low' ? 'Low' : effort === 'medium' ? 'Medium' : 'High';
-      return `${prefix} (${eff})`;
-    }
-    if (effort && trimmed.startsWith('Gemini 3.1 Pro')) {
-      const eff = effort === 'low' ? 'Low' : 'High';
-      return `Gemini 3.1 Pro (${eff})`;
-    }
-    return trimmed;
-  }
-
   const lower = trimmed.toLowerCase();
 
-  if (
-    (lower.includes('3.8') && lower.includes('flash')) ||
-    lower === '3.8-flash' ||
-    lower === 'gemini-3.8-flash' ||
-    lower === 'default'
-  ) {
-    const eff =
-      effort === 'low' ? 'Low' : effort === 'medium' ? 'Medium' : 'High';
-    return `Gemini 3.8 Flash (${eff})`;
+  if (lower === 'default') {
+    return 'gemini-2.5-flash';
   }
+
+  // If already exact model with parenthesized effort/mode, resolve the prefix
+  if (/\([^)]+\)$/.test(trimmed)) {
+    const prefix = trimmed.replace(/\s*\([^)]+\)$/, '').trim();
+    return resolveModel(prefix, effort);
+  }
+
   if (
-    (lower.includes('3.7') && lower.includes('flash')) ||
+    (lower.includes('2.5') && lower.includes('flash')) ||
+    lower === '2.5-flash' ||
     lower === 'flash' ||
-    lower === 'gemini-3.7-flash'
+    lower === 'gemini-flash' ||
+    lower === 'gemini-2.5-flash'
   ) {
-    const eff =
-      effort === 'low' ? 'Low' : effort === 'medium' ? 'Medium' : 'High';
-    return `Gemini 3.7 Flash (${eff})`;
+    return 'gemini-2.5-flash';
   }
+
   if (
-    (lower.includes('3.6') && lower.includes('flash')) ||
-    lower === '3.6-flash' ||
-    lower === 'gemini-3.6-flash'
-  ) {
-    const eff =
-      effort === 'low' ? 'Low' : effort === 'medium' ? 'Medium' : 'High';
-    return `Gemini 3.6 Flash (${eff})`;
-  }
-  if (
-    (lower.includes('3.5') && lower.includes('flash')) ||
-    lower === '3.5-flash' ||
-    lower === 'gemini-3.5-flash'
-  ) {
-    const eff =
-      effort === 'low' ? 'Low' : effort === 'medium' ? 'Medium' : 'High';
-    return `Gemini 3.5 Flash (${eff})`;
-  }
-  if (
-    (lower.includes('3.1') && lower.includes('pro')) ||
+    (lower.includes('2.5') && lower.includes('pro')) ||
+    lower === '2.5-pro' ||
     lower === 'pro' ||
-    lower === 'gemini-3.1-pro' ||
-    lower === 'gemini-pro'
+    lower === 'gemini-pro' ||
+    lower === 'gemini-2.5-pro'
   ) {
-    const eff = effort === 'low' ? 'Low' : 'High';
-    return `Gemini 3.1 Pro (${eff})`;
+    return 'gemini-2.5-pro';
   }
+
   if (
-    lower.includes('sonnet') ||
-    lower.includes('claude-3.7') ||
-    lower.includes('claude-sonnet')
+    (lower.includes('3.7') && (lower.includes('sonnet') || lower.includes('claude'))) ||
+    lower === 'claude-3.7' ||
+    lower === 'claude-3-7' ||
+    lower === 'claude-3.7-sonnet' ||
+    lower === 'claude-3-7-sonnet'
   ) {
-    return 'Claude Sonnet 4.6 (Thinking)';
+    return 'claude-3-7-sonnet';
   }
-  if (lower.includes('opus') || lower.includes('claude-opus')) {
-    return 'Claude Opus 4.6 (Thinking)';
+
+  if (
+    (lower.includes('3.5') && (lower.includes('sonnet') || lower.includes('claude'))) ||
+    lower === 'claude-3.5' ||
+    lower === 'claude-3-5' ||
+    lower === 'claude-3.5-sonnet' ||
+    lower === 'claude-3-5-sonnet'
+  ) {
+    return 'claude-3-5-sonnet';
   }
-  if (lower.includes('gpt') || lower.includes('120b')) {
-    return 'GPT-OSS 120B (Medium)';
+
+  if (lower.includes('sonnet') || lower.includes('claude-sonnet') || lower === 'sonnet') {
+    return 'claude-3-7-sonnet';
+  }
+
+  if (lower.includes('4o') || lower === 'gpt-4o' || lower === '4o') {
+    return 'gpt-4o';
   }
 
   for (const m of FALLBACK_MODELS) {
     if (
       m.id.toLowerCase() === lower ||
+      m.name.toLowerCase() === lower ||
       m.aliases?.some((a) => a.toLowerCase() === lower)
     ) {
       return m.id;
@@ -245,7 +202,15 @@ export function parseModelsOutput(output: string): ModelInfo[] {
     }
 
     // Format 3: Indented model names from agy
-    if (inAvailableBlock && (trimmed.startsWith('Gemini') || trimmed.startsWith('Claude') || trimmed.startsWith('GPT'))) {
+    if (
+      inAvailableBlock &&
+      (trimmed.startsWith('Gemini') ||
+        trimmed.startsWith('gemini') ||
+        trimmed.startsWith('Claude') ||
+        trimmed.startsWith('claude') ||
+        trimmed.startsWith('GPT') ||
+        trimmed.startsWith('gpt'))
+    ) {
       const id = trimmed;
       models.push({
         id,
@@ -255,39 +220,39 @@ export function parseModelsOutput(output: string): ModelInfo[] {
     }
   }
 
-  // Determine default model: Default model line -> Gemini 3.8 Flash (High) -> Gemini 3.7 Flash (High)
+  // Determine default model: Default model line -> gemini-2.5-flash / Gemini 2.5 Flash -> first model
   let defaultTarget = defaultModelId;
   if (!defaultTarget) {
-    if (
-      models.some(
-        (m) =>
-          m.name === 'Gemini 3.8 Flash (High)' ||
-          m.id === 'gemini-3.8-flash-high' ||
-          m.id === 'Gemini 3.8 Flash (High)'
-      )
-    ) {
-      defaultTarget = 'Gemini 3.8 Flash (High)';
-    } else if (
-      models.some(
-        (m) =>
-          m.name === 'Gemini 3.7 Flash (High)' ||
-          m.id === 'gemini-3.7-flash-high' ||
-          m.id === 'Gemini 3.7 Flash (High)'
-      )
-    ) {
-      defaultTarget = 'Gemini 3.7 Flash (High)';
+    const defaultCandidates = [
+      'gemini-2.5-flash',
+      'Gemini 2.5 Flash',
+      'gemini-2.5-flash-high',
+      'gemini-2.5-pro',
+      'Gemini 2.5 Pro',
+      'claude-3-7-sonnet',
+    ];
+    for (const candidate of defaultCandidates) {
+      if (
+        models.some(
+          (m) =>
+            m.id.toLowerCase() === candidate.toLowerCase() ||
+            m.name.toLowerCase() === candidate.toLowerCase()
+        )
+      ) {
+        defaultTarget = candidate;
+        break;
+      }
+    }
+    if (!defaultTarget && models.length > 0) {
+      defaultTarget = models[0].id || models[0].name;
     }
   }
 
   if (defaultTarget) {
     for (const m of models) {
       const isMatch =
-        m.id === defaultTarget ||
-        m.name === defaultTarget ||
-        (defaultTarget === 'Gemini 3.8 Flash (High)' &&
-          (m.id === 'gemini-3.8-flash-high' || m.name === 'Gemini 3.8 Flash (High)')) ||
-        (defaultTarget === 'Gemini 3.7 Flash (High)' &&
-          (m.id === 'gemini-3.7-flash-high' || m.name === 'Gemini 3.7 Flash (High)'));
+        m.id.toLowerCase() === defaultTarget.toLowerCase() ||
+        m.name.toLowerCase() === defaultTarget.toLowerCase();
 
       m.isDefault = Boolean(isMatch);
     }

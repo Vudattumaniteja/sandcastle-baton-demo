@@ -11,7 +11,6 @@ import {
   parsePrerequisites,
   parseAcceptanceCriteria,
   resolveExecutionQueue,
-  resolveExecutionScope,
   calculatePhaseBreakdown,
   assembleHandoffPayload,
   interpolatePrompt,
@@ -145,15 +144,19 @@ describe('packages/orchestrator', () => {
   });
 
   describe('handoff-calculator', () => {
-    it('should calculate synthetic phase breakdown durations', () => {
+    it('should return undefined phase durations when real phase timestamps are unavailable', () => {
       const breakdown = calculatePhaseBreakdown(10000);
-      expect(breakdown.inspectMs).toBe(1000);
-      expect(breakdown.implementMs).toBe(5000);
-      expect(breakdown.testMs).toBe(3000);
-      expect(breakdown.gitPrMs).toBe(1000);
+      expect(breakdown.inspectMs).toBeUndefined();
+      expect(breakdown.implementMs).toBeUndefined();
+      expect(breakdown.testMs).toBeUndefined();
+      expect(breakdown.gitPrMs).toBeUndefined();
+
+      const measured = calculatePhaseBreakdown(10000, { inspectMs: 1200, implementMs: 6000 });
+      expect(measured.inspectMs).toBe(1200);
+      expect(measured.implementMs).toBe(6000);
     });
 
-    it('should assemble a complete BatonHandoffPayload', () => {
+    it('should assemble a complete BatonHandoffPayload without fake telemetry defaults', () => {
       const payload = assembleHandoffPayload({
         mode: 'run',
         queueIndex: 0,
@@ -173,6 +176,10 @@ describe('packages/orchestrator', () => {
 
       expect(payload.countdownSeconds).toBe(3.0);
       expect(payload.completed.number).toBe(1);
+      expect(payload.completed.prNumber).toBeUndefined();
+      expect(payload.completed.testsPassed).toBeUndefined();
+      expect(payload.completed.tokensUsed).toBeUndefined();
+      expect(payload.completed.costUsd).toBeUndefined();
       expect(payload.next.number).toBe(2);
       expect(payload.next.acceptanceCriteria).toEqual([
         { text: 'AC 1', done: false },
@@ -440,6 +447,462 @@ describe('packages/orchestrator', () => {
           next: expect.objectContaining({ number: 2 }),
         })
       );
+    });
+
+    it('should skip PARENT and HITL issues with informational skip message and advance cleanly', async () => {
+      const parentIssue: GitHubIssue = {
+        number: 10,
+        title: 'Epic Issue',
+        body: '',
+        state: 'OPEN',
+        labels: [{ name: 'parent' }, { name: 'ready-for-agent' }, { name: 'AFK' }],
+      };
+      const hitlIssue: GitHubIssue = {
+        number: 11,
+        title: 'HITL Task',
+        body: '',
+        state: 'OPEN',
+        labels: [{ name: 'wayfinder:prototype' }],
+      };
+      const readyIssue: GitHubIssue = {
+        number: 12,
+        title: 'Ready Task',
+        body: '',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+      };
+
+      const mockGitHubClient = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn().mockImplementation((num: number) => {
+          if (num === 10) return Promise.resolve(parentIssue);
+          if (num === 11) return Promise.resolve(hitlIssue);
+          if (num === 12) return Promise.resolve(readyIssue);
+          return Promise.resolve(null);
+        }),
+        listIssues: vi.fn().mockResolvedValue([parentIssue, hitlIssue, readyIssue]),
+      };
+
+      const skippedEvents: any[] = [];
+      const orchestrator = new BatonOrchestrator({
+        repo: 'owner/repo',
+        issues: [10, 11, 12],
+        mode: 'dry-run',
+        githubClient: mockGitHubClient,
+        runStateStore: new InMemoryRunStateStore(),
+      });
+      orchestrator.on('phase:skipped', (p) => skippedEvents.push(p));
+
+      const result = await orchestrator.run();
+      expect(result.success).toBe(true);
+      expect(result.closedIssues).toEqual([12]);
+      expect(skippedEvents).toHaveLength(2);
+      expect(skippedEvents[0].issueNumber).toBe(10);
+      expect(skippedEvents[0].status).toBe('PARENT');
+      expect(skippedEvents[1].issueNumber).toBe(11);
+      expect(skippedEvents[1].status).toBe('HITL');
+    });
+
+    it('should forward explicit cwd to workerSupervisor.execute', async () => {
+      const mockIssue: GitHubIssue = {
+        number: 50,
+        title: 'CWD Forwarding Task',
+        body: '',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+      };
+
+      const mockGitHubClient = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn().mockImplementation((num: number) => {
+          if (num === 50) return Promise.resolve(mockIssue);
+          return Promise.resolve(null);
+        }),
+        listIssues: vi.fn().mockResolvedValue([mockIssue]),
+      };
+
+      const mockSupervisor = {
+        execute: vi.fn().mockImplementation(() => {
+          mockIssue.state = 'CLOSED';
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 100,
+            lastExitCode: 0,
+          });
+        }),
+      };
+
+      const orchestrator = new BatonOrchestrator({
+        repo: 'owner/repo',
+        issues: [50],
+        mode: 'afk',
+        cwd: '/custom/test/path',
+        githubClient: mockGitHubClient,
+        workerSupervisor: mockSupervisor,
+        runStateStore: new InMemoryRunStateStore(),
+      });
+
+      const result = await orchestrator.run();
+      expect(result.success).toBe(true);
+      expect(mockSupervisor.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: '/custom/test/path',
+        }),
+        undefined
+      );
+    });
+
+    it('should inject parent reference metadata into prompt context under parentContext: "reference" mode', async () => {
+      const childIssue: GitHubIssue = {
+        number: 31,
+        title: 'Child Task',
+        body: 'Part of #30',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+      };
+      const parentIssue: GitHubIssue = {
+        number: 30,
+        title: 'Epic Spec',
+        body: 'Full parent epic body',
+        state: 'OPEN',
+        labels: [{ name: 'parent' }],
+        url: 'https://github.com/owner/repo/issues/30',
+      };
+
+      const mockGitHubClient = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn().mockImplementation((num: number) => {
+          if (num === 31) return Promise.resolve(childIssue);
+          if (num === 30) return Promise.resolve(parentIssue);
+          return Promise.resolve(null);
+        }),
+        listIssues: vi.fn().mockResolvedValue([parentIssue, childIssue]),
+        syncParentChecklist: vi.fn().mockResolvedValue(true),
+        postParentProgressComment: vi.fn().mockResolvedValue(true),
+      };
+
+      let capturedPrompt = '';
+      const mockSupervisor = {
+        execute: vi.fn().mockImplementation((req) => {
+          capturedPrompt = req.prompt;
+          childIssue.state = 'CLOSED';
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 100,
+            lastExitCode: 0,
+          });
+        }),
+      };
+
+      const tplPath1 = path.join(tempDir, 'tpl1.md');
+      fs.writeFileSync(tplPath1, 'Issue: {{issue.number}}, Parent: {{parent.number}} {{parent.title}} {{parent.url}}');
+
+      const orchestrator = new BatonOrchestrator({
+        repo: 'owner/repo',
+        issues: [31],
+        mode: 'afk',
+        parentContext: 'reference',
+        promptTemplate: tplPath1,
+        githubClient: mockGitHubClient,
+        workerSupervisor: mockSupervisor,
+        runStateStore: new InMemoryRunStateStore(),
+      });
+
+      const result = await orchestrator.run();
+      expect(result.success).toBe(true);
+      expect(capturedPrompt).toContain('Issue: 31');
+      expect(capturedPrompt).toContain('Parent: 30 Epic Spec https://github.com/owner/repo/issues/30');
+      expect(capturedPrompt).not.toContain('Full parent epic body');
+    });
+
+    it('should inline parent issue body into prompt context under parentContext: "inline" mode', async () => {
+      const childIssue: GitHubIssue = {
+        number: 32,
+        title: 'Child Task 2',
+        body: 'Part of #30',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+      };
+      const parentIssue: GitHubIssue = {
+        number: 30,
+        title: 'Epic Spec',
+        body: 'Full parent epic body inline content',
+        state: 'OPEN',
+        labels: [{ name: 'parent' }],
+        url: 'https://github.com/owner/repo/issues/30',
+      };
+
+      const mockGitHubClient = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn().mockImplementation((num: number) => {
+          if (num === 32) return Promise.resolve(childIssue);
+          if (num === 30) return Promise.resolve(parentIssue);
+          return Promise.resolve(null);
+        }),
+        listIssues: vi.fn().mockResolvedValue([parentIssue, childIssue]),
+        syncParentChecklist: vi.fn().mockResolvedValue(true),
+        postParentProgressComment: vi.fn().mockResolvedValue(true),
+      };
+
+      let capturedPrompt = '';
+      const mockSupervisor = {
+        execute: vi.fn().mockImplementation((req) => {
+          capturedPrompt = req.prompt;
+          childIssue.state = 'CLOSED';
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 100,
+            lastExitCode: 0,
+          });
+        }),
+      };
+
+      const tplPath2 = path.join(tempDir, 'tpl2.md');
+      fs.writeFileSync(tplPath2, 'Issue: {{issue.number}}, Parent Body: {{parent.body}}');
+
+      const orchestrator = new BatonOrchestrator({
+        repo: 'owner/repo',
+        issues: [32],
+        mode: 'afk',
+        parentContext: 'inline',
+        promptTemplate: tplPath2,
+        githubClient: mockGitHubClient,
+        workerSupervisor: mockSupervisor,
+        runStateStore: new InMemoryRunStateStore(),
+      });
+
+      const result = await orchestrator.run();
+      expect(result.success).toBe(true);
+      expect(capturedPrompt).toContain('Issue: 32');
+      expect(capturedPrompt).toContain('Parent Body: Full parent epic body inline content');
+    });
+
+    it('should omit parent issue metadata from prompt context under parentContext: "none" mode', async () => {
+      const childIssue: GitHubIssue = {
+        number: 33,
+        title: 'Child Task 3',
+        body: 'Part of #30',
+        state: 'OPEN',
+        labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+      };
+
+      const mockGitHubClient = {
+        getRepo: vi.fn().mockResolvedValue('owner/repo'),
+        getIssue: vi.fn().mockImplementation((num: number) => {
+          if (num === 33) return Promise.resolve(childIssue);
+          return Promise.resolve(null);
+        }),
+        listIssues: vi.fn().mockResolvedValue([childIssue]),
+      };
+
+      let capturedPrompt = '';
+      const mockSupervisor = {
+        execute: vi.fn().mockImplementation((req) => {
+          capturedPrompt = req.prompt;
+          childIssue.state = 'CLOSED';
+          return Promise.resolve({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 100,
+            lastExitCode: 0,
+          });
+        }),
+      };
+
+      const tplPath3 = path.join(tempDir, 'tpl3.md');
+      fs.writeFileSync(tplPath3, 'Issue: {{issue.number}}, Parent: [{{parent.number}}]');
+
+      const orchestrator = new BatonOrchestrator({
+        repo: 'owner/repo',
+        issues: [33],
+        mode: 'afk',
+        parentContext: 'none',
+        promptTemplate: tplPath3,
+        githubClient: mockGitHubClient,
+        workerSupervisor: mockSupervisor,
+        runStateStore: new InMemoryRunStateStore(),
+      });
+
+      const result = await orchestrator.run();
+      expect(result.success).toBe(true);
+      expect(capturedPrompt).toContain('Issue: 33');
+      expect(capturedPrompt).toContain('Parent: []');
+      expect(capturedPrompt).not.toContain('30');
+    });
+
+    describe('Live Issue Closure Verification & Corrective Retry Protocol (#71)', () => {
+      it('should query GitHub for closure after worker exits 0 and complete cleanly when issue is CLOSED', async () => {
+        const mockIssue: GitHubIssue = {
+          number: 71,
+          title: 'Verification Issue',
+          body: '',
+          state: 'OPEN',
+          labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+        };
+
+        const mockGitHubClient = {
+          getRepo: vi.fn().mockResolvedValue('owner/repo'),
+          getIssue: vi.fn().mockImplementation((num: number) => {
+            if (num === 71) return Promise.resolve(mockIssue);
+            return Promise.resolve(null);
+          }),
+          listIssues: vi.fn().mockResolvedValue([mockIssue]),
+        };
+
+        const mockSupervisor = {
+          execute: vi.fn().mockImplementation(() => {
+            mockIssue.state = 'CLOSED';
+            return Promise.resolve({
+              success: true,
+              status: 'completed',
+              attempts: 1,
+              totalDurationMs: 100,
+              lastExitCode: 0,
+            });
+          }),
+        };
+
+        const orchestrator = new BatonOrchestrator({
+          repo: 'owner/repo',
+          issues: [71],
+          mode: 'afk',
+          githubClient: mockGitHubClient,
+          workerSupervisor: mockSupervisor,
+          runStateStore: new InMemoryRunStateStore(),
+        });
+
+        const result = await orchestrator.run();
+        expect(result.success).toBe(true);
+        expect(result.closedIssues).toEqual([71]);
+        expect(mockSupervisor.execute).toHaveBeenCalledTimes(1);
+      });
+
+      it('should trigger a single corrective retry when worker exits with code 0 but issue remains OPEN, and complete when corrective attempt closes issue', async () => {
+        const mockIssue: GitHubIssue = {
+          number: 72,
+          title: 'Corrective Retry Issue',
+          body: '',
+          state: 'OPEN',
+          labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+        };
+
+        const mockGitHubClient = {
+          getRepo: vi.fn().mockResolvedValue('owner/repo'),
+          getIssue: vi.fn().mockImplementation((num: number) => {
+            if (num === 72) return Promise.resolve(mockIssue);
+            return Promise.resolve(null);
+          }),
+          listIssues: vi.fn().mockResolvedValue([mockIssue]),
+        };
+
+        let attempts = 0;
+        const mockSupervisor = {
+          execute: vi.fn().mockImplementation((req) => {
+            attempts++;
+            if (attempts === 1) {
+              // Exits 0, but issue remains OPEN on GitHub
+              return Promise.resolve({
+                success: true,
+                status: 'completed',
+                attempts: 1,
+                totalDurationMs: 100,
+                lastExitCode: 0,
+              });
+            } else {
+              // Corrective retry closes the issue
+              expect(req.prompt).toContain('[Sandcastle Worker Contract Directive]');
+              mockIssue.state = 'CLOSED';
+              return Promise.resolve({
+                success: true,
+                status: 'completed',
+                attempts: 1,
+                totalDurationMs: 100,
+                lastExitCode: 0,
+              });
+            }
+          }),
+        };
+
+        const retries: any[] = [];
+        const orchestrator = new BatonOrchestrator({
+          repo: 'owner/repo',
+          issues: [72],
+          mode: 'afk',
+          githubClient: mockGitHubClient,
+          workerSupervisor: mockSupervisor,
+          runStateStore: new InMemoryRunStateStore(),
+        });
+        orchestrator.on('worker:retry', (p) => retries.push(p));
+
+        const result = await orchestrator.run();
+        expect(result.success).toBe(true);
+        expect(result.closedIssues).toEqual([72]);
+        expect(mockSupervisor.execute).toHaveBeenCalledTimes(2);
+        expect(retries).toHaveLength(1);
+        expect(retries[0].issueNumber).toBe(72);
+        expect(retries[0].attempt).toBe(2);
+      });
+
+      it('should invoke blocker protocol and halt baton when issue remains OPEN after corrective retry', async () => {
+        const mockIssue: GitHubIssue = {
+          number: 73,
+          title: 'Persistent OPEN Issue',
+          body: '',
+          state: 'OPEN',
+          labels: [{ name: 'ready-for-agent' }, { name: 'AFK' }],
+        };
+
+        const mockGitHubClient = {
+          getRepo: vi.fn().mockResolvedValue('owner/repo'),
+          getIssue: vi.fn().mockImplementation((num: number) => {
+            if (num === 73) return Promise.resolve(mockIssue);
+            return Promise.resolve(null);
+          }),
+          listIssues: vi.fn().mockResolvedValue([mockIssue]),
+          reportBlocker: vi.fn().mockResolvedValue(undefined),
+        };
+
+        const mockSupervisor = {
+          execute: vi.fn().mockResolvedValue({
+            success: true,
+            status: 'completed',
+            attempts: 1,
+            totalDurationMs: 100,
+            lastExitCode: 0,
+          }),
+        };
+
+        const blockedEvents: any[] = [];
+        const orchestrator = new BatonOrchestrator({
+          repo: 'owner/repo',
+          issues: [73],
+          mode: 'afk',
+          githubClient: mockGitHubClient,
+          workerSupervisor: mockSupervisor,
+          runStateStore: new InMemoryRunStateStore(),
+        });
+        orchestrator.on('baton:blocked', (p) => blockedEvents.push(p));
+
+        const result = await orchestrator.run();
+        expect(result.success).toBe(false);
+        expect(result.blockedIssues).toEqual([73]);
+        expect(mockSupervisor.execute).toHaveBeenCalledTimes(2);
+        expect(blockedEvents).toHaveLength(1);
+        expect(blockedEvents[0].issueNumber).toBe(73);
+        expect(mockGitHubClient.reportBlocker).toHaveBeenCalledWith(
+          expect.objectContaining({
+            issueNumber: 73,
+            reason: expect.stringContaining('remained OPEN on GitHub after corrective retry'),
+          })
+        );
+      });
     });
   });
 });

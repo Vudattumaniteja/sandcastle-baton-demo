@@ -1,13 +1,13 @@
 import pc from 'picocolors';
-import { ConfigService } from '../services/config-service.js';
-import type { ConfigKey } from '../types/config.js';
+import { ConfigStore } from '#packages/state';
+import type { ConfigKey } from '#packages/state';
 
 export function configGetCommand(
   key: string,
   options: { json?: boolean } = {},
-  service?: ConfigService
+  service?: ConfigStore | any
 ): void {
-  const config = service ?? new ConfigService();
+  const config = service ?? new ConfigStore();
   const value = config.get(key as ConfigKey);
 
   if (options.json) {
@@ -21,9 +21,9 @@ export function configSetCommand(
   key: string,
   value: string,
   options: { global?: boolean } = {},
-  service?: ConfigService
+  service?: ConfigStore | any
 ): void {
-  const config = service ?? new ConfigService();
+  const config = service ?? new ConfigStore();
   let parsedValue: any = value;
   if (value === 'true') parsedValue = true;
   else if (value === 'false') parsedValue = false;
@@ -36,9 +36,9 @@ export function configSetCommand(
 
 export function configListCommand(
   options: { json?: boolean } = {},
-  service?: ConfigService
+  service?: ConfigStore | any
 ): void {
-  const config = service ?? new ConfigService();
+  const config = service ?? new ConfigStore();
   const list = config.list();
 
   if (options.json) {

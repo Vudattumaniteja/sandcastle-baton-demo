@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import { EventEmitter } from 'events';
 import {
   formatGatingBadge,
@@ -12,8 +15,6 @@ import {
   formatProgressBar,
   formatHandoffProgressBar,
   formatMs,
-  formatHandoffSummary,
-  renderHandoffBySurface,
   HandoffPresenter,
   getEnterAlternateScreenSequence,
   getExitAlternateScreenSequence,
@@ -31,12 +32,12 @@ import {
   createBoxCard,
   WatchDashboard,
   WatchMonitor,
-  HandoffTransitionController,
   runHandoffTransition,
 } from '#packages/terminal';
 import type { BatonHandoffPayload } from '../src/types/handoff.js';
 import type { GatingEvaluation } from '../src/types/gating.js';
 import type { ModelInfo } from '../src/types/antigravity.js';
+import type { BatonRunSnapshot } from '#packages/state';
 
 describe('packages/terminal', () => {
   describe('index.ts formatters & HandoffPresenter', () => {
@@ -266,8 +267,185 @@ describe('packages/terminal', () => {
   });
 
   describe('monitor.ts', () => {
+    let tempDir: string;
+    let runJsonPath: string;
+    let transcriptPath: string;
+
+    beforeEach(() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-monitor-test-'));
+      runJsonPath = path.join(tempDir, '.sandcastle', 'run.json');
+      fs.mkdirSync(path.dirname(runJsonPath), { recursive: true });
+      transcriptPath = path.join(tempDir, 'transcript.jsonl');
+    });
+
+    afterEach(() => {
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch {
+        // Tolerates ENOENT cleanup race
+      }
+    });
+
     it('should export WatchDashboard as alias for WatchMonitor', () => {
       expect(WatchDashboard).toBe(WatchMonitor);
+    });
+
+    it('should send alternate-screen enter and exit escape sequences', () => {
+      const outputChunks: string[] = [];
+      const mockWriter = (str: string) => outputChunks.push(str);
+
+      const monitor = new WatchMonitor({
+        cwd: tempDir,
+        stateFilePath: runJsonPath,
+        transcriptPath,
+        writer: mockWriter,
+        renderOnce: true,
+      });
+
+      monitor.enterAlternateScreen();
+      const entered = outputChunks.join('');
+      expect(entered).toContain('\x1b[?1049h');
+      expect(entered).toContain('\x1b[?25l');
+
+      outputChunks.length = 0;
+      monitor.exitAlternateScreen();
+      const exited = outputChunks.join('');
+      expect(exited).toContain('\x1b[?1049l');
+      expect(exited).toContain('\x1b[?25h');
+    });
+
+    it('should render active session snapshot, reasoning, and tool calls', async () => {
+      const snapshot: BatonRunSnapshot = {
+        sessionId: 'test-session-123',
+        startTime: new Date(Date.now() - 65000).toISOString(),
+        status: 'running',
+        repo: 'test-owner/test-repo',
+        mode: 'afk',
+        currentIssue: 27,
+        totalIssues: 3,
+        closedCount: 1,
+        blockedCount: 0,
+        processedIssues: [
+          {
+            number: 26,
+            title: 'Previous Issue',
+            status: 'completed',
+            durationMs: 45000,
+          },
+        ],
+        lastUpdated: new Date().toISOString(),
+      };
+      fs.writeFileSync(runJsonPath, JSON.stringify(snapshot, null, 2), 'utf-8');
+
+      const step1 = {
+        step_index: 0,
+        source: 'MODEL',
+        type: 'PLANNER_RESPONSE',
+        status: 'DONE',
+        created_at: new Date().toISOString(),
+        content: 'I am implementing the alternate-screen monitor.',
+        tool_calls: [
+          {
+            name: 'replace_file_content',
+            args: { TargetFile: 'src/commands/watch.ts' },
+            toolAction: 'Editing watch monitor',
+            toolSummary: 'Edit file',
+          },
+        ],
+      };
+      fs.writeFileSync(transcriptPath, `${JSON.stringify(step1)}\n`, 'utf-8');
+
+      const outputChunks: string[] = [];
+      const mockWriter = (str: string) => outputChunks.push(str);
+
+      const monitor = new WatchMonitor({
+        cwd: tempDir,
+        stateFilePath: runJsonPath,
+        transcriptPath,
+        writer: mockWriter,
+        renderOnce: true,
+      });
+
+      await monitor.render();
+
+      const rendered = outputChunks.join('');
+      expect(rendered).toContain('test-session-123');
+      expect(rendered).toContain('test-owner/test-repo');
+      expect(rendered).toContain('Issue #27');
+      expect(rendered).toContain('RUNNING');
+      expect(rendered).toContain('I am implementing the alternate-screen monitor.');
+      expect(rendered).toContain('replace_file_content');
+      expect(rendered).toContain('Editing watch monitor');
+    });
+
+    it('should render idle status when run.json is not present', async () => {
+      const outputChunks: string[] = [];
+      const mockWriter = (str: string) => outputChunks.push(str);
+
+      const monitor = new WatchMonitor({
+        cwd: tempDir,
+        stateFilePath: path.join(tempDir, 'nonexistent', 'run.json'),
+        writer: mockWriter,
+        renderOnce: true,
+      });
+
+      await monitor.render();
+
+      const rendered = outputChunks.join('');
+      expect(rendered).toContain('No active Sandcastle baton run detected');
+      expect(rendered).toContain('Waiting for session');
+    });
+
+    it('should render in-flight handoff HUD box when snapshot contains handoff state', async () => {
+      const snapshot: BatonRunSnapshot = {
+        sessionId: 'test-handoff-sess',
+        startTime: new Date(Date.now() - 45000).toISOString(),
+        status: 'running',
+        repo: 'test-owner/test-repo',
+        mode: 'afk',
+        currentIssue: 36,
+        totalIssues: 5,
+        closedCount: 1,
+        blockedCount: 0,
+        processedIssues: [],
+        lastUpdated: new Date().toISOString(),
+        handoff: {
+          mode: 'run',
+          queueIndex: 2,
+          totalQueue: 5,
+          countdownSeconds: 3.0,
+          isPaused: false,
+          completed: {
+            number: 36,
+            title: 'CLI flags and wizard flow',
+            durationMs: 42000,
+          },
+          next: {
+            number: 37,
+            title: 'Visual baton handoff banners',
+            gatingStatus: 'READY',
+          },
+        },
+      };
+      fs.writeFileSync(runJsonPath, JSON.stringify(snapshot, null, 2), 'utf-8');
+
+      const outputChunks: string[] = [];
+      const mockWriter = (str: string) => outputChunks.push(str);
+
+      const monitor = new WatchMonitor({
+        cwd: tempDir,
+        stateFilePath: runJsonPath,
+        writer: mockWriter,
+        renderOnce: true,
+      });
+
+      await monitor.render();
+
+      const rendered = outputChunks.join('');
+      expect(rendered).toContain('Baton In Flight');
+      expect(rendered).toContain('Issue #36');
+      expect(rendered).toContain('Issue #37');
+      expect(rendered).toContain('[READY]');
     });
   });
 });

@@ -1,7 +1,5 @@
-import fs from 'fs';
-import path from 'path';
 import pc from 'picocolors';
-import type { BatonRunSnapshot } from '../types/baton.js';
+import { RunStateStore } from '#packages/state';
 
 export interface StatusCommandOptions {
   json?: boolean;
@@ -12,11 +10,12 @@ export interface StatusCommandOptions {
 export async function statusCommand(
   options: StatusCommandOptions = {}
 ): Promise<void> {
-  const cwd = options.cwd ?? process.cwd();
-  const stateFilePath =
-    options.stateFilePath ?? path.join(cwd, '.sandcastle', 'run.json');
+  const store = new RunStateStore({
+    cwd: options.cwd,
+    stateFilePath: options.stateFilePath,
+  });
 
-  if (!fs.existsSync(stateFilePath)) {
+  if (!store.exists()) {
     if (options.json) {
       console.log(
         JSON.stringify({ status: 'idle', message: 'No active or past baton runs recorded.' }, null, 2)
@@ -28,15 +27,12 @@ export async function statusCommand(
     return;
   }
 
-  let snapshot: BatonRunSnapshot;
-  try {
-    const raw = fs.readFileSync(stateFilePath, 'utf-8');
-    snapshot = JSON.parse(raw) as BatonRunSnapshot;
-  } catch (err: any) {
+  const snapshot = store.read();
+  if (!snapshot) {
     if (options.json) {
-      console.log(JSON.stringify({ status: 'error', error: err.message }, null, 2));
+      console.log(JSON.stringify({ status: 'error', error: 'Failed to parse baton snapshot' }, null, 2));
     } else {
-      console.error(pc.red(`Failed to parse baton snapshot: ${err.message}`));
+      console.error(pc.red('Failed to parse baton snapshot'));
     }
     return;
   }

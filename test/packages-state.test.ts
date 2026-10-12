@@ -4,7 +4,6 @@ import path from 'path';
 import os from 'os';
 import {
   RunStateStore,
-  ConfigStore,
   DEFAULT_CONFIG,
   InMemoryRunStateStore,
   InMemoryConfigStore,
@@ -14,7 +13,6 @@ import {
   resolveGlobalConfigPath,
   mergeConfig,
   readJsonFileSync,
-  writeJsonFileSync,
   type BatonRunSnapshot,
 } from '#packages/state';
 

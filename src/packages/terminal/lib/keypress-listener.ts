@@ -1,4 +1,3 @@
-import type { EventEmitter } from 'events';
 
 export interface KeypressListenerOptions {
   stdin?: NodeJS.ReadStream;

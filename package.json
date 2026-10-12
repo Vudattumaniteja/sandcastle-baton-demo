@@ -40,7 +40,7 @@
     "typecheck": "tsc --noEmit && npm run lint:boundaries",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm test && npm run lint:boundaries && npm run build && node scripts/verify-build.mjs",
+    "verify": "npm run build && npm test && npm run lint:boundaries && node scripts/verify-build.mjs",
     "prepack": "npm run build && npm run build:verify"
   },
   "dependencies": {

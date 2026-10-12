@@ -12,11 +12,8 @@ import {
   getQuotaSnapshot,
   resolveQuotaDelay,
   normalizeQuotaInfo,
-  normalizeStatuslineSnapshot,
-  resolveCandidateQuotaInfo,
   isQuotaError,
   type SupervisorEvent,
-  type WorkerExecutionRequest,
 } from '#packages/worker-runtime';
 
 describe('packages/worker-runtime', () => {
@@ -31,40 +28,43 @@ describe('packages/worker-runtime', () => {
   });
 
   describe('models entry point', () => {
-    it('should resolve models with reasoning effort correctly', () => {
-      expect(resolveModel('gemini-3.8-flash', 'low')).toBe('Gemini 3.8 Flash (Low)');
-      expect(resolveModel('gemini-3.8-flash', 'medium')).toBe('Gemini 3.8 Flash (Medium)');
-      expect(resolveModel('gemini-3.8-flash', 'high')).toBe('Gemini 3.8 Flash (High)');
-      expect(resolveModel('flash')).toBe('Gemini 3.7 Flash (High)');
-      expect(resolveModel('pro')).toBe('Gemini 3.1 Pro (High)');
-      expect(resolveModel('claude-sonnet')).toBe('Claude Sonnet 4.6 (Thinking)');
-      expect(resolveModel('gpt-120b')).toBe('GPT-OSS 120B (Medium)');
-      expect(resolveModel(undefined, 'medium')).toBe('Gemini 3.8 Flash (Medium)');
+    it('should resolve models correctly with aliases and defaults', () => {
+      expect(resolveModel('gemini-2.5-flash')).toBe('gemini-2.5-flash');
+      expect(resolveModel('2.5-flash')).toBe('gemini-2.5-flash');
+      expect(resolveModel('flash')).toBe('gemini-2.5-flash');
+      expect(resolveModel('gemini-2.5-pro')).toBe('gemini-2.5-pro');
+      expect(resolveModel('pro')).toBe('gemini-2.5-pro');
+      expect(resolveModel('claude-3.7')).toBe('claude-3-7-sonnet');
+      expect(resolveModel('claude-sonnet')).toBe('claude-3-7-sonnet');
+      expect(resolveModel('claude-3.5')).toBe('claude-3-5-sonnet');
+      expect(resolveModel('gpt-4o')).toBe('gpt-4o');
+      expect(resolveModel('4o')).toBe('gpt-4o');
+      expect(resolveModel(undefined)).toBe('gemini-2.5-flash');
     });
 
     it('should parse models CLI output and mark default', () => {
       const output = `Available models:
-  Gemini 3.8 Flash (High)
-  Gemini 3.7 Flash (High)
-  Claude Sonnet 4.6 (Thinking)
+  gemini-2.5-flash
+  gemini-2.5-pro
+  claude-3-7-sonnet
 `;
       const models = parseModelsOutput(output);
       expect(models.length).toBe(3);
-      expect(models[0].name).toBe('Gemini 3.8 Flash (High)');
+      expect(models[0].name).toBe('gemini-2.5-flash');
       expect(models[0].isDefault).toBe(true);
       expect(models[1].isDefault).toBe(false);
     });
 
     it('should discover models via executor or return FALLBACK_MODELS on error', async () => {
       const mockExecutor = vi.fn().mockResolvedValue({
-        stdout: 'Available models:\n  Gemini 3.8 Flash (High)\n',
+        stdout: 'Available models:\n  gemini-2.5-flash\n',
         stderr: '',
         exitCode: 0,
       });
 
       const discovered = await discoverModels(1000, 'agy', mockExecutor);
       expect(discovered.length).toBe(1);
-      expect(discovered[0].name).toBe('Gemini 3.8 Flash (High)');
+      expect(discovered[0].name).toBe('gemini-2.5-flash');
 
       const failingExecutor = vi.fn().mockRejectedValue(new Error('CLI error'));
       const fallback = await discoverModels(1000, 'agy', failingExecutor);
@@ -303,6 +303,86 @@ describe('packages/worker-runtime', () => {
       expect(result.success).toBe(false);
       expect(result.status).toBe('aborted');
       expect(result.error).toContain('Execution aborted by parent signal.');
+    });
+
+    it('should retry up to 2 times (3 attempts total) on failure before declaring hard block', async () => {
+      const mockExecutor = vi.fn().mockResolvedValue({
+        stdout: '',
+        stderr: 'Persistent compilation failure',
+        exitCode: 1,
+      });
+
+      const supervisor = new WorkerSupervisor({
+        executor: mockExecutor,
+        maxRetries: 2,
+        onEvent: (e) => recordedEvents.push(e),
+      });
+
+      const result = await supervisor.execute({
+        repo: 'owner/repo',
+        issueNumber: 10,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.status).toBe('blocked');
+      expect(result.attempts).toBe(3);
+      expect(mockExecutor).toHaveBeenCalledTimes(3);
+
+      const blockEvent = recordedEvents.find((e) => e.type === 'blocked');
+      expect(blockEvent).toBeDefined();
+    });
+
+    it('should enforce hard ceiling of 3 consecutive quota pauses and block execution', async () => {
+      const mockExecutor = vi.fn().mockResolvedValue({
+        stdout: '',
+        stderr: 'Quota limit exceeded (HTTP 429)',
+        exitCode: 429,
+      });
+
+      const supervisor = new WorkerSupervisor({
+        executor: mockExecutor,
+        sleeper: vi.fn().mockResolvedValue(undefined),
+        onEvent: (e) => recordedEvents.push(e),
+      });
+
+      const result = await supervisor.execute({
+        repo: 'owner/repo',
+        issueNumber: 11,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.status).toBe('blocked');
+      expect(result.error).toContain('Exceeded maximum consecutive quota pauses (3)');
+    });
+
+    it('should trigger outer watchdog timeout and abort hanging child process', async () => {
+      const mockExecutor = vi.fn().mockImplementation((_file, _args, options) => {
+        return new Promise((_resolve, reject) => {
+          if (options?.signal) {
+            options.signal.addEventListener('abort', () => {
+              const err: any = new Error('Process aborted');
+              err.name = 'AbortError';
+              err.timedOut = true;
+              reject(err);
+            });
+          }
+        });
+      });
+
+      const supervisor = new WorkerSupervisor({
+        executor: mockExecutor,
+        outerTimeoutMs: 50,
+        onEvent: (e) => recordedEvents.push(e),
+      });
+
+      const result = await supervisor.execute({
+        repo: 'owner/repo',
+        issueNumber: 12,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.status).toBe('timed_out');
+      expect(result.error).toContain('Process exceeded outer watchdog timeout.');
     });
   });
 });

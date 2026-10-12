@@ -1,9 +1,7 @@
-import fs from 'fs';
 import path from 'path';
-import type { BatonRunSnapshot } from '../types/baton.js';
-import { WatchMonitor } from '../ui/watch-monitor.js';
-import { TranscriptTailer } from '../core/transcript-tailer.js';
-import { AntigravityService } from '../services/antigravity-service.js';
+import { WatchMonitor } from '#packages/terminal';
+import { TranscriptTailer, getQuotaSnapshot } from '#packages/worker-runtime';
+import { RunStateStore } from '#packages/state';
 
 export interface WatchCommandOptions {
   interval?: string | number;
@@ -37,15 +35,8 @@ export async function watchCommand(
 
   // Handle JSON output mode
   if (options.json) {
-    let snapshot: BatonRunSnapshot | null = null;
-    if (fs.existsSync(stateFilePath)) {
-      try {
-        const raw = fs.readFileSync(stateFilePath, 'utf-8');
-        snapshot = JSON.parse(raw);
-      } catch {
-        // Tolerates concurrent write or partial JSON during state updates
-      }
-    }
+    const store = new RunStateStore({ cwd, stateFilePath });
+    const snapshot = store.read();
 
     const tailer = new TranscriptTailer({
       filePath: options.file,
@@ -54,8 +45,7 @@ export async function watchCommand(
     await tailer.poll();
     const transcript = tailer.getSummary();
 
-    const agyService = new AntigravityService();
-    const statusline = await agyService.getStatuslineSnapshot();
+    const statusline = await getQuotaSnapshot();
 
     console.log(
       JSON.stringify(

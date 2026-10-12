@@ -1,10 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
 import { execaNode } from 'execa';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const distBin = path.resolve(__dirname, '../dist/bin/sandcastle.js');
+const rootDir = path.resolve(__dirname, '..');
+const distBin = path.resolve(rootDir, 'dist/bin/sandcastle.js');
+
+beforeAll(() => {
+  if (!fs.existsSync(distBin)) {
+    execSync('npm run build', { cwd: rootDir, stdio: 'pipe' });
+  }
+});
 
 describe('CLI Interactive Entrypoint & Help', () => {
   it('should display help when invoked with no arguments in a non-interactive (non-TTY) shell', async () => {

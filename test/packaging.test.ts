@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
 import { execaNode } from 'execa';
 import { VERSION } from '../src/index.js';
 
@@ -12,6 +13,12 @@ const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
 const distBin = path.resolve(rootDir, 'dist/bin/sandcastle.js');
 const distLib = path.resolve(rootDir, 'dist/index.js');
 const distDts = path.resolve(rootDir, 'dist/index.d.ts');
+
+beforeAll(() => {
+  if (!fs.existsSync(distBin) || !fs.existsSync(distLib)) {
+    execSync('npm run build', { cwd: rootDir, stdio: 'pipe' });
+  }
+});
 
 describe('Packaging & Configuration Specification', () => {
   it('should define dual binaries sandcastle and sc in package.json', () => {

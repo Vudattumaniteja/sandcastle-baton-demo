@@ -1,4 +1,5 @@
-import type { BatonRunnerOptions, BatonFinishPayload, ExecutionScope } from './baton.js';
+import type { BatonFinishPayload, ExecutionScope } from './baton.js';
+import type { BatonOrchestratorOptions } from '#packages/orchestrator';
 import type { DoctorReport } from './doctor.js';
 import type { ModelInfo, StatuslineSnapshot } from './antigravity.js';
 import type { GatingEvaluation } from './gating.js';
@@ -94,12 +95,18 @@ export interface WizardConfigContract {
 
 export interface WizardDependencies {
   prompts?: WizardPrompts;
+  doctorEngine?: WizardDoctorContract;
   doctorService?: WizardDoctorContract;
+  githubClient?: WizardGitHubContract;
   githubService?: WizardGitHubContract;
   antigravityService?: WizardAntigravityContract;
+  discoverModels?: () => Promise<ModelInfo[]>;
+  getStatuslineSnapshot?: () => Promise<StatuslineSnapshot | null>;
+  gatingEngine?: WizardGatingContract;
   gatingEvaluator?: WizardGatingContract;
+  configStore?: WizardConfigContract;
   configService?: WizardConfigContract;
-  runnerFactory?: (options: BatonRunnerOptions) => {
+  runnerFactory?: (options: BatonOrchestratorOptions) => {
     run: () => Promise<BatonFinishPayload>;
     on: (event: string, listener: (...args: any[]) => void) => any;
   };

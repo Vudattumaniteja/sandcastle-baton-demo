@@ -114,7 +114,7 @@ export function buildMergePullRequestArgs(
 ): string[] {
   const args = ['pr', 'merge', String(prNumberOrBranch), '--repo', repo];
 
-  const method = options.method ?? 'merge';
+  const method = options.method ?? options.strategy ?? 'merge';
   if (method === 'merge') {
     args.push('--merge');
   } else if (method === 'squash') {
@@ -123,7 +123,7 @@ export function buildMergePullRequestArgs(
     args.push('--rebase');
   }
 
-  if (options.auto) {
+  if (options.auto || options.autoMerge) {
     args.push('--auto');
   }
   if (options.deleteBranch) {

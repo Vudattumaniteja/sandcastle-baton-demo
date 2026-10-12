@@ -17,6 +17,7 @@ export {
 export {
   buildBlockerComment,
   buildParentProgressComment,
+  buildProgressComment,
 } from './lib/comment-builder.js';
 
 export {

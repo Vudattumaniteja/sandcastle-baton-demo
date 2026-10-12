@@ -1,7 +1,7 @@
 import type { SandcastleConfig } from '../types.js';
 
 export const DEFAULT_CONFIG: Required<SandcastleConfig> = {
-  model: 'Gemini 3.8 Flash',
+  model: 'gemini-2.5-flash',
   reasoningEffort: 'high',
   mode: 'afk',
   timeout: '30m',

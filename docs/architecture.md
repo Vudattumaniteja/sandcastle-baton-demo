@@ -16,21 +16,21 @@ Sandcastle orchestrates isolated, per-issue worker sessions. Each issue is proce
                                  │
                                  ▼
                   ┌──────────────────────────────┐
-                  │        BatonRunner           │
+                  │      BatonOrchestrator       │
                   │  (Event-Driven State Machine)│
                   └──────┬───────────────┬───────┘
                          │               │
        Gating Evaluation │               │ Worker Execution
                          ▼               ▼
          ┌─────────────────────┐   ┌───────────────────────────┐
-         │   GatingEvaluator   │   │     ProcessSupervisor     │
+         │     GatingEngine    │   │      WorkerSupervisor     │
          │  (Safety & Epics)   │   │  (Watchdogs, Retries, 429)│
          └─────────────────────┘   └─────────────┬─────────────┘
                                                  │
                                                  ▼
                                    ┌───────────────────────────┐
-                                   │    AntigravityService     │
-                                   │    (Isolated agy worker)  │
+                                   │      agy CLI Worker       │
+                                   │  (Isolated worker runtime)│
                                    └───────────────────────────┘
 ```
 
@@ -52,13 +52,14 @@ Every issue worker runs inside an isolated Google Antigravity session. The worke
 
 ## 3. Core Domain Orchestration
 
-### `BatonRunner` (`src/core/baton-runner.ts`)
-The `BatonRunner` is an `EventEmitter` state machine that drives sequential queue traversal. It emits strongly typed events throughout execution:
+### `BatonOrchestrator` (`#packages/orchestrator`)
+The `BatonOrchestrator` is an `EventEmitter` state machine that drives sequential queue traversal. It emits strongly typed events throughout execution:
 
 | Event | Payload | Trigger |
 | :--- | :--- | :--- |
 | `baton:start` | `{ repo, mode, issues, scope, model }` | Execution queue resolved and ready. |
 | `baton:gating` | `{ issueNumber, evaluation }` | Gate conditions evaluated for an issue. |
+| `phase:skipped` | `{ issueNumber, status, reason }` | Parent, epic, or human-in-the-loop issue skipped. |
 | `worker:start` | `{ issueNumber, title, attempt, maxAttempts }` | Worker process launched for an issue. |
 | `worker:phase` | `{ issueNumber, phase, message }` | Phase transition during run (dry-run or live). |
 | `worker:retry` | `{ issueNumber, attempt, maxAttempts, error }` | Worker attempt failed; retrying. |
@@ -67,8 +68,8 @@ The `BatonRunner` is an `EventEmitter` state machine that drives sequential queu
 | `baton:blocked` | `{ issueNumber, reason, evidence }` | Gate or verification failure; baton halted. |
 | `baton:finish` | `BatonFinishPayload` | All issues completed or stopped on blocker. |
 
-### Handoff Transition & Pacing Controller (`src/ui/handoff-transition.ts`)
-Between completed issues, `BatonRunner` emits `'baton:handoff'` containing:
+### Handoff Transition & Pacing Controller (`#packages/terminal`)
+Between completed issues, `BatonOrchestrator` emits `'baton:handoff'` containing:
 - Completed issue metrics (duration, PR number, tokens, branch).
 - Next issue preview (gating status, labels, parent info, acceptance criteria).
 
@@ -79,7 +80,7 @@ If interactive pacing is enabled, Sandcastle displays a visual countdown banner 
 
 ---
 
-## 4. Gating & Safety Engine (`src/core/gating-evaluator.ts`)
+## 4. Gating & Safety Engine (`#packages/orchestrator`)
 
 Sandcastle never executes an issue unless all safety preconditions are met.
 
@@ -101,9 +102,9 @@ Sandcastle never executes an issue unless all safety preconditions are met.
 
 ---
 
-## 5. Process Supervisor (`src/core/process-supervisor.ts`)
+## 5. Worker Supervisor (`#packages/worker-runtime`)
 
-Subprocesses are managed by `ProcessSupervisor` with strict signal safety, retry policies, and watchdog timeouts.
+Subprocesses are managed by `WorkerSupervisor` with strict signal safety, retry policies, and watchdog timeouts.
 
 ### Subprocess Safety
 - **Orchestration**: Powered by `execa` v9 with `killDescendants: true`.
@@ -118,7 +119,7 @@ Subprocesses are managed by `ProcessSupervisor` with strict signal safety, retry
 
 ---
 
-## 6. Antigravity CLI Interop (`src/services/antigravity-service.ts`)
+## 6. Antigravity CLI Interop (`#packages/worker-runtime`)
 
 Sandcastle drives Google Antigravity via its CLI (`agy`):
 
@@ -126,14 +127,14 @@ Sandcastle drives Google Antigravity via its CLI (`agy`):
 agy \
   --dangerously-skip-permissions \
   --print-timeout 30m \
-  --model "Gemini 3.8 Flash (High)" \
+  --model "gemini-2.5-flash" \
   --prompt "<interpolated worker prompt>" \
   --add-dir "/path/to/project"
 ```
 
 ### Model Normalization
-Model identifiers and aliases are normalized into recognized Antigravity models:
-- Default: `Gemini 3.8 Flash (High)` (aliases: `3.8-flash`, `gemini-3.8-flash`, `default`).
-- Flash: `Gemini 3.7 Flash (High)` (aliases: `3.7-flash`, `flash`).
-- Pro: `Gemini 3.1 Pro (High)` (aliases: `3.1-pro`, `pro`).
-- Third-Party: `Claude Sonnet 4.6 (Thinking)`, `Claude Opus 4.6 (Thinking)`, `GPT-OSS 120B (Medium)`.
+Model identifiers and aliases are normalized into recognized models:
+- Default: `gemini-2.5-flash` (aliases: `flash`, `gemini-flash`, `default`).
+- Pro: `gemini-2.5-pro` (aliases: `pro`, `gemini-pro`).
+- Claude: `claude-3-7-sonnet` (aliases: `sonnet`, `claude-3.7`), `claude-3-5-sonnet`.
+- OpenAI: `gpt-4o` (aliases: `4o`, `gpt4o`).

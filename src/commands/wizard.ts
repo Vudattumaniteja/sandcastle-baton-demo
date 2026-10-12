@@ -1,14 +1,18 @@
 import * as clack from '@clack/prompts';
 import pc from 'picocolors';
-import { BatonRunner } from '../core/baton-runner.js';
-import { GitHubService } from '../services/github-service.js';
 import {
-  AntigravityService,
-  resolveAgyModel,
-} from '../services/antigravity-service.js';
-import { DoctorService } from '../services/doctor-service.js';
-import { ConfigService } from '../services/config-service.js';
-import { GatingEvaluator } from '../core/gating-evaluator.js';
+  BatonOrchestrator,
+  GatingEngine,
+  type BatonOrchestratorOptions,
+} from '#packages/orchestrator';
+import { GitHubClient } from '#packages/github';
+import {
+  discoverModels,
+  resolveModel,
+  getQuotaSnapshot,
+} from '#packages/worker-runtime';
+import { DoctorEngine } from '#packages/diagnostics';
+import { ConfigStore } from '#packages/state';
 import {
   formatIssueOption,
   formatModelOption,
@@ -16,7 +20,7 @@ import {
   getExecutionModeChoices,
   formatLaunchManifest,
   formatPhaseMessage,
-} from '../ui/formatters.js';
+} from '#packages/terminal';
 import type {
   WizardOptions,
   WizardDependencies,
@@ -24,7 +28,6 @@ import type {
   WizardManifest,
   WizardPromptOption,
 } from '../types/wizard.js';
-import type { BatonRunnerOptions } from '../types/baton.js';
 
 /**
  * Runs the interactive guided Sandcastle wizard (Variant A TUI Flow).
@@ -35,15 +38,15 @@ export async function wizardCommand(
 ): Promise<WizardResult> {
   const prompts = deps.prompts ?? clack;
   const cwd = deps.cwd ?? options.cwd ?? process.cwd();
-  const configService = deps.configService ?? new ConfigService({ cwd });
-  const githubService = deps.githubService ?? new GitHubService();
-  const antigravityService = deps.antigravityService ?? new AntigravityService();
-  const doctorService = deps.doctorService ?? new DoctorService({ cwd });
-  const resolvedConfig = configService.resolve();
-  const gatingEvaluator =
+  const configStore = deps.configStore ?? deps.configService ?? new ConfigStore({ cwd });
+  const githubClient = deps.githubClient ?? deps.githubService ?? new GitHubClient();
+  const doctorEngine = deps.doctorEngine ?? deps.doctorService ?? new DoctorEngine({ cwd });
+  const resolvedConfig = configStore.resolve();
+  const gatingEngine =
+    deps.gatingEngine ??
     deps.gatingEvaluator ??
-    new GatingEvaluator({
-      githubService,
+    new GatingEngine({
+      githubClient,
       parentLabels: resolvedConfig.parentLabels,
       hitlLabels: resolvedConfig.hitlLabels,
     });
@@ -52,7 +55,7 @@ export async function wizardCommand(
 
   const s = prompts.spinner();
   s.start('Running workspace and preflight diagnostics...');
-  const doctorReport = await doctorService.runDiagnostics();
+  const doctorReport = await doctorEngine.runDiagnostics();
 
   if (!doctorReport.healthy) {
     const failedCheck =
@@ -72,8 +75,8 @@ export async function wizardCommand(
   s.stop(pc.green('Preflight validation passed.'));
 
   s.start('Fetching backlog issues & gating prerequisites...');
-  const targetRepo = await githubService.getRepo();
-  const openIssues = await githubService.listIssues({ state: 'open' });
+  const targetRepo = await githubClient.getRepo();
+  const openIssues = await githubClient.listIssues({ state: 'open' });
 
   if (!openIssues || openIssues.length === 0) {
     s.stop(pc.yellow('No open issues found in repository.'));
@@ -81,7 +84,7 @@ export async function wizardCommand(
     return { cancelled: true, error: 'No open issues found in repository.' };
   }
 
-  const evaluationMap = await gatingEvaluator.evaluateBacklog(
+  const evaluationMap = await gatingEngine.evaluateBacklog(
     openIssues,
     targetRepo
   );
@@ -103,7 +106,7 @@ export async function wizardCommand(
   for (const issue of openIssues) {
     const evalResult =
       evaluationMap.get(issue.number) ||
-      (await gatingEvaluator.evaluateIssue(issue, targetRepo));
+      (await gatingEngine.evaluateIssue(issue, targetRepo));
 
     // Filter out parent and HITL issues from the main issue picker
     if (evalResult.status === 'PARENT' || evalResult.status === 'HITL') {
@@ -143,7 +146,7 @@ export async function wizardCommand(
       (i) => evaluationMap.get(i.number)?.isReady
     );
     isChildTask = readyIssues.some(
-      (i) => gatingEvaluator.parseParentReferences(i.body || '').length > 0
+      (i) => gatingEngine.parseParentReferences(i.body || '').length > 0
     );
   } else {
     const issueNum = Number(selectedIssue);
@@ -179,7 +182,7 @@ export async function wizardCommand(
           evaluationMap.get(i.number)?.status !== 'HITL'
       );
       isChildTask = issuesInScope.some(
-        (i) => gatingEvaluator.parseParentReferences(i.body || '').length > 0
+        (i) => gatingEngine.parseParentReferences(i.body || '').length > 0
       );
     } else {
       issuesToRun = [issueNum];
@@ -187,7 +190,7 @@ export async function wizardCommand(
       targetDescription = `Single Issue (#${issueNum})`;
       const foundIssue = openIssues.find((i) => i.number === issueNum);
       const parentRefs = foundIssue
-        ? gatingEvaluator.parseParentReferences(foundIssue.body || '')
+        ? gatingEngine.parseParentReferences(foundIssue.body || '')
         : [];
       isChildTask = parentRefs.length > 0;
     }
@@ -210,8 +213,16 @@ export async function wizardCommand(
   }
 
   s.start('Discovering available Antigravity models & quota...');
-  const discoveredModels = await antigravityService.discoverModels();
-  const statuslineSnapshot = await antigravityService.getStatuslineSnapshot();
+  const discoveredModels = deps.discoverModels
+    ? await deps.discoverModels()
+    : deps.antigravityService?.discoverModels
+    ? await deps.antigravityService.discoverModels()
+    : await discoverModels();
+  const statuslineSnapshot = deps.getStatuslineSnapshot
+    ? await deps.getStatuslineSnapshot()
+    : deps.antigravityService?.getStatuslineSnapshot
+    ? await deps.antigravityService.getStatuslineSnapshot()
+    : await getQuotaSnapshot();
   s.stop(pc.green(`Discovered ${discoveredModels.length} model(s).`));
 
   const modelOptions = discoveredModels.map((m) =>
@@ -231,7 +242,7 @@ export async function wizardCommand(
     return { cancelled: true };
   }
 
-  const initialEffort = (configService.get('reasoningEffort') || 'high') as 'high' | 'medium' | 'low';
+  const initialEffort = (configStore.get('reasoningEffort') || 'high') as 'high' | 'medium' | 'low';
   const effortOptions = getReasoningEffortChoices();
   const selectedEffort = await prompts.select({
     message: 'Select reasoning effort level:',
@@ -265,7 +276,7 @@ export async function wizardCommand(
     branch = branchMatch[1].trim();
   }
 
-  const resolvedModel = resolveAgyModel(
+  const resolvedModel = resolveModel(
     String(selectedModel),
     selectedEffort as any
   );
@@ -298,7 +309,7 @@ export async function wizardCommand(
     return { cancelled: true, manifest };
   }
 
-  const runnerOptions: BatonRunnerOptions = {
+  const runnerOptions: BatonOrchestratorOptions = {
     repo: manifest.repo,
     issues: manifest.issues,
     all: manifest.all,
@@ -310,11 +321,14 @@ export async function wizardCommand(
     autoPr: manifest.autoPr,
     autoMerge: manifest.autoMerge,
     cwd,
+    githubClient,
+    gatingEngine,
+    configStore,
   };
 
   const runner = deps.runnerFactory
     ? deps.runnerFactory(runnerOptions)
-    : new BatonRunner(runnerOptions);
+    : new BatonOrchestrator(runnerOptions);
 
   const execSpinner = prompts.spinner();
 

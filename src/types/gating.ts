@@ -1,4 +1,3 @@
-import type { GitHubIssue } from './github.js';
 
 export type GatingStatus =
   | 'READY'

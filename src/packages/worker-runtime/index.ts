@@ -20,11 +20,7 @@ import {
   isQuotaError,
   resolveQuotaDelay,
   getQuotaSnapshot,
-  StatuslineSnapshot,
-  StatuslineQuotaInfo,
-  normalizeQuotaInfo,
-  normalizeStatuslineSnapshot,
-  resolveCandidateQuotaInfo,
+  type StatuslineSnapshot,
 } from './lib/quota-evaluator.js';
 import { sleep } from './lib/watchdog-timer.js';
 import type { SupervisorEvent, SuperviseResult } from '../../types/supervisor.js';
@@ -89,7 +85,6 @@ export class WorkerSupervisor {
   private sleeper: (ms: number, signal?: AbortSignal) => Promise<void>;
   private onEvent?: (event: SupervisorEvent) => void;
   private activeController?: AbortController;
-  private signalCleanup?: () => void;
 
   constructor(options: WorkerSupervisorOptions = {}) {
     this.customAgyPath = options.customAgyPath ?? 'agy';
@@ -159,7 +154,6 @@ export class WorkerSupervisor {
       process.removeListener('SIGTERM', sigtermListener);
     };
 
-    this.signalCleanup = cleanup;
     return cleanup;
   }
 
@@ -347,6 +341,7 @@ export class WorkerSupervisor {
               totalAttempts: attempt,
             });
             this.restoreCursor();
+            const quotaErrorMessage = `Exceeded maximum consecutive quota pauses (3). Final error: ${failureFeedback}`;
             return {
               success: false,
               status: 'blocked',
@@ -355,7 +350,7 @@ export class WorkerSupervisor {
               lastExitCode: runResult.exitCode,
               lastStdout: runResult.stdout,
               lastStderr: runResult.stderr,
-              error: failureFeedback,
+              error: quotaErrorMessage,
             };
           }
 

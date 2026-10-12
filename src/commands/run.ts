@@ -1,11 +1,13 @@
 import pc from 'picocolors';
 import * as clack from '@clack/prompts';
-import { BatonRunner } from '../core/baton-runner.js';
-import { GitHubService } from '../services/github-service.js';
-import { GatingEvaluator } from '../core/gating-evaluator.js';
+import {
+  BatonOrchestrator,
+  GatingEngine,
+  type BatonOrchestratorOptions,
+} from '#packages/orchestrator';
+import { GitHubClient } from '#packages/github';
 import { wizardCommand } from './wizard.js';
 import type {
-  BatonRunnerOptions,
   BatonFinishPayload,
   ExecutionScope,
 } from '../types/baton.js';
@@ -31,7 +33,7 @@ export interface RunCommandOptions {
   cwd?: string;
 }
 
-export type RunnerFactory = (options: BatonRunnerOptions) => {
+export type RunnerFactory = (options: BatonOrchestratorOptions) => {
   run: () => Promise<BatonFinishPayload>;
   on: (event: string, listener: (...args: any[]) => void) => any;
 };
@@ -39,8 +41,10 @@ export type RunnerFactory = (options: BatonRunnerOptions) => {
 export interface RunCommandDeps {
   wizardCommand?: () => Promise<any>;
   isTTY?: boolean;
-  githubService?: GitHubService;
-  gatingEvaluator?: GatingEvaluator;
+  githubClient?: GitHubClient;
+  githubService?: any;
+  gatingEngine?: GatingEngine;
+  gatingEvaluator?: any;
   prompts?: any;
 }
 
@@ -156,8 +160,8 @@ export async function runCommand(
     return;
   }
 
-  const githubService = deps.githubService ?? new GitHubService({ repo: options.repo });
-  const gatingEvaluator = deps.gatingEvaluator ?? new GatingEvaluator({ githubService });
+  const githubClient = deps.githubClient ?? deps.githubService ?? new GitHubClient({ repo: options.repo });
+  const gatingEngine = deps.gatingEngine ?? deps.gatingEvaluator ?? new GatingEngine({ githubClient });
 
   // Build ExecutionScope
   let scope: ExecutionScope;
@@ -206,17 +210,17 @@ export async function runCommand(
     let isParent = false;
     let childTargets: number[] = [];
     try {
-      const targetRepo = await githubService.getRepo(options.repo);
-      const targetIssue = await githubService.getIssue(target, targetRepo);
+      const targetRepo = await githubClient.getRepo(options.repo);
+      const targetIssue = await githubClient.getIssue(target, targetRepo);
       if (targetIssue) {
-        const evalResult = await gatingEvaluator.evaluateIssue(targetIssue, targetRepo);
+        const evalResult = await gatingEngine.evaluateIssue(targetIssue, targetRepo);
         if (evalResult.status === 'PARENT') {
           isParent = true;
-          const openIssues = await githubService.listIssues({ state: 'open', repo: targetRepo });
+          const openIssues = await githubClient.listIssues({ state: 'open', repo: targetRepo });
           const childIssues = openIssues
-            .filter((i) => gatingEvaluator.parseParentReferences(i.body || '').includes(target))
-            .sort((a, b) => a.number - b.number);
-          childTargets = childIssues.map((i) => i.number);
+            .filter((i: any) => gatingEngine.parseParentReferences(i.body || '').includes(target))
+            .sort((a: any, b: any) => a.number - b.number);
+          childTargets = childIssues.map((i: any) => i.number);
         }
       }
     } catch {
@@ -277,7 +281,7 @@ export async function runCommand(
   const retries =
     options.retries !== undefined ? parseInt(String(options.retries), 10) : undefined;
 
-  const runnerOptions: BatonRunnerOptions = {
+  const runnerOptions: BatonOrchestratorOptions = {
     scope,
     issues: scope.type === 'only' ? scope.targets : undefined,
     all: scope.type === 'all',
@@ -294,13 +298,13 @@ export async function runCommand(
     promptTemplate: options.promptTemplate,
     parentContext: options.parentContext,
     cwd: options.cwd ?? process.cwd(),
-    githubService,
-    gatingEvaluator,
+    githubClient,
+    gatingEngine,
   };
 
   const runner = runnerFactory
     ? runnerFactory(runnerOptions)
-    : new BatonRunner(runnerOptions);
+    : new BatonOrchestrator(runnerOptions);
 
   const isQuiet = options.quiet || options.json;
 

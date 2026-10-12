@@ -177,6 +177,8 @@ export class HandoffTransitionController {
     this.isRunning = true;
     this.remainingSeconds = this.durationSeconds;
     this.setupKeyListeners();
+    const rendered = renderHandoffBySurface(this.payload, this.mode);
+    this.write(`${rendered}\n`);
     this.triggerTick();
 
     return new Promise<HandoffAction>((resolve) => {

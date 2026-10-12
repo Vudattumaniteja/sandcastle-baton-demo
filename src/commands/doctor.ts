@@ -1,5 +1,5 @@
 import pc from 'picocolors';
-import { DoctorService } from '../services/doctor-service.js';
+import { DoctorEngine } from '#packages/diagnostics';
 
 export interface DoctorCommandOptions {
   json?: boolean;
@@ -8,9 +8,9 @@ export interface DoctorCommandOptions {
 
 export async function doctorCommand(
   options: DoctorCommandOptions = {},
-  service?: DoctorService
+  service?: DoctorEngine | any
 ): Promise<void> {
-  const doctor = service ?? new DoctorService({ cwd: options.cwd });
+  const doctor = service ?? new DoctorEngine({ cwd: options.cwd });
   const report = await doctor.runDiagnostics();
 
   if (options.json) {

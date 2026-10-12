@@ -57,13 +57,16 @@ describe('packages/github', () => {
       expect(comment).toContain('### Remediation');
     });
 
-    it('should build parent progress comment with child details', () => {
+    it('should build parent progress comment with child details and no fake telemetry defaults', () => {
       const comment = buildParentProgressComment({
         parentNumber: 10,
         childNumber: 15,
         childTitle: 'Auth token support',
       });
       expect(comment).toContain('## 📋 Child Issue Completed: #15 - Auth token support');
+      expect(comment).toContain('No automated verification telemetry recorded.');
+      expect(comment).not.toContain('100% green');
+      expect(comment).not.toContain('0 failures');
     });
   });
 
@@ -83,6 +86,89 @@ describe('packages/github', () => {
       expect(mockExecutor).toHaveBeenCalledWith(
         'gh',
         expect.arrayContaining(['issue', 'view', '5']),
+        expect.any(Object)
+      );
+    });
+
+    it('should create and merge PR with strategy', async () => {
+      mockExecutor
+        .mockResolvedValueOnce({
+          stdout: 'https://github.com/owner/repo/pull/15\n',
+          stderr: '',
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          stdout: '',
+          stderr: '',
+          exitCode: 0,
+        });
+
+      const client = new GitHubClient({ repo: 'owner/repo', executor: mockExecutor });
+      const pr = await client.createPullRequest({
+        title: 'Feature PR',
+        body: 'Closes #5',
+        head: 'issue-5',
+        base: 'main',
+      });
+
+      expect(pr.number).toBe(15);
+      expect(pr.url).toBe('https://github.com/owner/repo/pull/15');
+
+      await client.mergePullRequest(15, { strategy: 'squash', autoMerge: true, deleteBranch: true });
+      expect(mockExecutor).toHaveBeenLastCalledWith(
+        'gh',
+        expect.arrayContaining(['pr', 'merge', '15', '--squash', '--delete-branch']),
+        expect.any(Object)
+      );
+    });
+
+    it('should label issue blocked and post audit comment via reportBlocker', async () => {
+      mockExecutor
+        .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 })
+        .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 });
+
+      const client = new GitHubClient({ repo: 'owner/repo', executor: mockExecutor });
+      await client.reportBlocker({
+        issueNumber: 20,
+        reason: 'Build failed after 3 attempts',
+      });
+
+      expect(mockExecutor).toHaveBeenCalledWith(
+        'gh',
+        expect.arrayContaining(['issue', 'edit', '20', '--add-label', 'status blocked']),
+        expect.any(Object)
+      );
+      expect(mockExecutor).toHaveBeenCalledWith(
+        'gh',
+        expect.arrayContaining(['issue', 'comment', '20']),
+        expect.any(Object)
+      );
+    });
+
+    it('should sync parent checklist and update parent issue body', async () => {
+      mockExecutor
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify({
+            number: 10,
+            title: 'Parent',
+            body: '- [ ] #5 Child task',
+            state: 'OPEN',
+          }),
+          stderr: '',
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          stdout: '',
+          stderr: '',
+          exitCode: 0,
+        });
+
+      const client = new GitHubClient({ repo: 'owner/repo', executor: mockExecutor });
+      const updated = await client.syncParentChecklist(10, 5);
+      expect(updated).toBe(true);
+      expect(mockExecutor).toHaveBeenCalledWith(
+        'gh',
+        expect.arrayContaining(['issue', 'edit', '10', '--body', '- [x] #5 Child task']),
         expect.any(Object)
       );
     });

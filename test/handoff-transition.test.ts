@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
 import {
   renderWizardMode,
@@ -7,13 +7,11 @@ import {
   renderCiMode,
   renderHandoffBySurface,
   formatMs,
-} from '../src/ui/handoff-formatter.js';
-import {
   HandoffTransitionController,
   runHandoffTransition,
-} from '../src/ui/handoff-transition.js';
+} from '#packages/terminal';
 import type { BatonHandoffPayload } from '../src/types/handoff.js';
-import { BatonRunner } from '../src/core/baton-runner.js';
+import { BatonOrchestrator } from '#packages/orchestrator';
 
 describe('Baton Handoff Banners & Interactive Pacing Controller (Issue #45)', () => {
   const samplePayload: BatonHandoffPayload = {
@@ -129,6 +127,27 @@ describe('Baton Handoff Banners & Interactive Pacing Controller (Issue #45)', ()
       expect(output).toContain('[q]');
     });
 
+    it('should display N/A for tests, tokens, and cost when telemetry is not recorded', () => {
+      const unrecordedPayload: BatonHandoffPayload = {
+        ...samplePayload,
+        mode: 'run',
+        completed: {
+          number: 36,
+          title: 'CLI execution flags',
+          durationMs: 42800,
+        },
+      };
+
+      const output = renderRunMode(unrecordedPayload);
+      expect(output).toContain('Tests:');
+      expect(output).toContain('Tokens:');
+      expect(output).toContain('Cost:');
+      expect(output).toContain('N/A');
+      expect(output).not.toContain('14 passed');
+      expect(output).not.toContain('18.5k');
+      expect(output).not.toContain('$0.0038');
+    });
+
     it('should render watch mode with Alternate-screen HUD box', () => {
       const output = renderWatchMode({ ...samplePayload, mode: 'watch' });
 
@@ -223,6 +242,7 @@ describe('Baton Handoff Banners & Interactive Pacing Controller (Issue #45)', ()
       expect(result).toBe('continue');
       expect(onTick).toHaveBeenCalled();
       expect(mockStdin.setRawMode).toHaveBeenCalledWith(false);
+      expect(writtenChunks.join('')).toContain('Issue #36 closed successfully');
 
       vi.useRealTimers();
     });
@@ -385,12 +405,12 @@ describe('Baton Handoff Banners & Interactive Pacing Controller (Issue #45)', ()
         }),
       };
 
-      const runner = new BatonRunner({
+      const runner = new BatonOrchestrator({
         issues: [1, 2],
         mode: 'dry-run',
-        githubService: mockGitHubService,
-        gatingEvaluator: mockGatingEvaluator,
-        processSupervisor: mockSupervisor,
+        githubClient: mockGitHubService as any,
+        gatingEngine: mockGatingEvaluator as any,
+        workerSupervisor: mockSupervisor as any,
       });
 
       const handoffEvents: BatonHandoffPayload[] = [];

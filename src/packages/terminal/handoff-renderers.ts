@@ -1,6 +1,7 @@
 import pc from 'picocolors';
 import type { BatonHandoffPayload, HandoffRenderMode } from '../../types/handoff.js';
 import { formatMs, formatHandoffProgressBar } from './lib/ansi-progress.js';
+import { padAnsi } from './lib/layout-calculator.js';
 
 /**
  * 1. CLACK WIZARD MODE (Interactive step note card format)
@@ -67,7 +68,7 @@ export function renderWizardMode(state: BatonHandoffPayload): string {
     );
   }
 
-  const modelStr = next.model || 'gemini-3.7-flash';
+  const modelStr = next.model || 'gemini-2.5-flash';
   const effortStr = next.reasoningEffort || 'high';
   lines.push(
     `${pc.cyan('│')}  ${pc.bold('Engine:')}     ${modelStr} (${effortStr} reasoning)`
@@ -113,7 +114,7 @@ export function renderRunMode(state: BatonHandoffPayload): string {
     `BATON COMPLETED: Issue #${completed.number}`
   )}`;
   lines.push(
-    `${pc.bold(pc.green('║'))}${titleHeader.padEnd(83)}${pc.bold(pc.green('║'))}`
+    `${pc.bold(pc.green('║'))}${padAnsi(titleHeader, 74)}${pc.bold(pc.green('║'))}`
   );
 
   const branchStr = completed.branchName || `issue-${completed.number}-worker`;
@@ -124,24 +125,30 @@ export function renderRunMode(state: BatonHandoffPayload): string {
     prStr
   )}  │  ${pc.bold('Duration:')} ${formatMs(completed.durationMs)}`;
   lines.push(
-    `${pc.bold(pc.green('║'))}${metric1.padEnd(92)}${pc.bold(pc.green('║'))}`
+    `${pc.bold(pc.green('║'))}${padAnsi(metric1, 74)}${pc.bold(pc.green('║'))}`
   );
 
-  const testsPassed = completed.testsPassed ?? 14;
-  const tokensUsed = completed.tokensUsed
-    ? `${(completed.tokensUsed / 1000).toFixed(1)}k`
-    : '18.5k';
-  const costUsd =
+  const testsStr =
+    completed.testsPassed !== undefined
+      ? `${pc.green(`${completed.testsPassed} passed`)}${
+          completed.testsTotal !== undefined && completed.testsPassed === completed.testsTotal
+            ? ' (100% green)'
+            : ''
+        }`
+      : 'N/A';
+  const tokensStr =
+    completed.tokensUsed !== undefined
+      ? `${(completed.tokensUsed / 1000).toFixed(1)}k`
+      : 'N/A';
+  const costStr =
     completed.costUsd !== undefined
       ? `$${completed.costUsd.toFixed(4)}`
-      : '$0.0038';
-  const metric2 = `  ${pc.bold('Tests:')} ${pc.green(
-    `${testsPassed} passed`
-  )} (100% green)  │  ${pc.bold('Tokens:')} ${tokensUsed}  │  ${pc.bold(
-    'Cost:'
-  )} ${costUsd}`;
+      : 'N/A';
+  const metric2 = `  ${pc.bold('Tests:')} ${testsStr}  │  ${pc.bold(
+    'Tokens:'
+  )} ${tokensStr}  │  ${pc.bold('Cost:')} ${costStr}`;
   lines.push(
-    `${pc.bold(pc.green('║'))}${metric2.padEnd(92)}${pc.bold(pc.green('║'))}`
+    `${pc.bold(pc.green('║'))}${padAnsi(metric2, 74)}${pc.bold(pc.green('║'))}`
   );
 
   lines.push(
@@ -204,7 +211,7 @@ export function renderRunMode(state: BatonHandoffPayload): string {
     );
   }
 
-  const modelStr = next.model || 'gemini-3.7-flash';
+  const modelStr = next.model || 'gemini-2.5-flash';
   const effortStr = next.reasoningEffort || 'high';
   const estSeconds = next.estimatedDurationSeconds || 45;
   const configLine = `  ${pc.bold('Engine:')}     ${modelStr} (${effortStr} reasoning) • Est: ~${estSeconds}s`;
@@ -287,30 +294,38 @@ export function renderWatchMode(state: BatonHandoffPayload): string {
     )
   );
   const prPart = completed.prNumber ? ` • PR #${completed.prNumber}` : '';
+  const testPart =
+    completed.testsPassed !== undefined
+      ? ` • ${completed.testsPassed} passed${
+          completed.testsTotal && completed.testsPassed === completed.testsTotal
+            ? ' (100% green)'
+            : ''
+        }`
+      : '';
   const lastLine = `│  ${pc.green('✔ Last Completed:')} Issue #${
     completed.number
-  } (${formatMs(completed.durationMs)}${prPart} • 100% green)`;
-  lines.push(lastLine.padEnd(81) + '│');
+  } (${formatMs(completed.durationMs)}${prPart}${testPart})`;
+  lines.push(padAnsi(lastLine, 72) + '│');
 
-  const modelStr = next.model || 'gemini-3.7-flash';
+  const modelStr = next.model || 'gemini-2.5-flash';
   const effortStr = next.reasoningEffort || 'high';
   const nextLine = `│  ${pc.cyan('▶ Next Candidate:')}  Issue #${
     next.number
   } [READY] • ${modelStr} (${effortStr})`;
-  lines.push(nextLine.padEnd(81) + '│');
+  lines.push(padAnsi(nextLine, 72) + '│');
 
   if (next.parentIssue) {
     const parentLine = `│  ${pc.gray('↳ Parent Issue:')}   #${
       next.parentIssue.number
     } (Child ${next.parentIssue.childIndex} of ${next.parentIssue.totalChildren})`;
-    lines.push(parentLine.padEnd(81) + '│');
+    lines.push(padAnsi(parentLine, 72) + '│');
   }
 
   const countBar = formatHandoffProgressBar(60, 20);
   const spoolLine = `│  ${pc.bold(
     '⏱ Next Session:'
   )}   Spooling in ${countdownText} [${countBar}]`;
-  lines.push(spoolLine.padEnd(89) + '│');
+  lines.push(padAnsi(spoolLine, 72) + '│');
   lines.push(
     pc.bold(
       pc.white('└───────────────────────────────────────────────────────────────────────┘')
@@ -325,16 +340,22 @@ export function renderWatchMode(state: BatonHandoffPayload): string {
   );
   const prCommentPart = completed.prNumber ? ` for PR #${completed.prNumber}` : '';
   lines.push(
-    `│ ${pc.italic(
-      pc.cyan(
-        `Finalizing git merge${prCommentPart} and verifying closure audit comment...`
-      )
-    )}`.padEnd(84) + '│'
+    padAnsi(
+      `│ ${pc.italic(
+        pc.cyan(
+          `Finalizing git merge${prCommentPart} and verifying closure audit comment...`
+        )
+      )}`,
+      72
+    ) + '│'
   );
   lines.push(
-    `│ ${pc.dim(
-      `Preparing clean worker context for Issue #${next.number}...`.padEnd(68)
-    )}│`
+    padAnsi(
+      `│ ${pc.dim(
+        `Preparing clean worker context for Issue #${next.number}...`
+      )}`,
+      72
+    ) + '│'
   );
   lines.push(
     pc.bold(
@@ -344,10 +365,14 @@ export function renderWatchMode(state: BatonHandoffPayload): string {
 
   lines.push('');
   const quotaBar = formatHandoffProgressBar(88, 10);
+  const tokensStr =
+    completed.tokensUsed !== undefined
+      ? `${(completed.tokensUsed / 1000).toFixed(1)}k`
+      : 'N/A';
   lines.push(
     `  ${pc.bold('Model:')} ${pc.green(modelStr)}  │  ${pc.bold(
       'Quota:'
-    )} ${quotaBar} 88%  │  ${pc.bold('Tokens:')} 18.4k`
+    )} ${quotaBar} 88%  │  ${pc.bold('Tokens:')} ${tokensStr}`
   );
 
   return lines.join('\n');
