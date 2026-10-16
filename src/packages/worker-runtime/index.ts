@@ -28,6 +28,7 @@ import type { SupervisorEvent, SuperviseResult } from '../../types/supervisor.js
 export {
   discoverModels,
   resolveModel,
+  DEFAULT_MODEL_ID,
   FALLBACK_MODELS,
   type ModelInfo,
   parseModelsOutput,

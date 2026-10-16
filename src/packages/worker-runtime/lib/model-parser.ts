@@ -10,12 +10,54 @@ export interface ModelInfo {
   effort?: 'low' | 'medium' | 'high';
 }
 
+export const DEFAULT_MODEL_ID = 'gemini-3.8-flash-medium';
+
 export const FALLBACK_MODELS: ModelInfo[] = [
+  {
+    id: 'gemini-3.8-flash-medium',
+    name: 'Gemini 3.8 Flash (Medium)',
+    aliases: ['3.8-flash', 'flash', 'gemini-flash', 'gemini-3.8-flash', 'gemini-3.8-flash-medium'],
+    effort: 'medium',
+    isDefault: true,
+  },
+  {
+    id: 'gemini-3.8-flash-high',
+    name: 'Gemini 3.8 Flash (High)',
+    aliases: ['3.8-flash-high', 'flash-high', 'gemini-3.8-flash-high'],
+    effort: 'high',
+    isDefault: false,
+  },
+  {
+    id: 'gemini-3.8-flash-low',
+    name: 'Gemini 3.8 Flash (Low)',
+    aliases: ['3.8-flash-low', 'flash-low', 'gemini-3.8-flash-low'],
+    effort: 'low',
+    isDefault: false,
+  },
+  {
+    id: 'claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6 (Thinking)',
+    aliases: ['sonnet', 'claude-sonnet', 'claude-sonnet-4-6', 'sonnet-4.6', 'claude-4.6-sonnet'],
+    isDefault: false,
+  },
+  {
+    id: 'claude-opus-4-6-thinking',
+    name: 'Claude Opus 4.6 (Thinking)',
+    aliases: ['opus', 'claude-opus', 'claude-opus-4-6', 'opus-4.6'],
+    isDefault: false,
+  },
+  {
+    id: 'gpt-oss-120b-medium',
+    name: 'GPT-OSS 120B (Medium)',
+    aliases: ['gpt-oss', 'gpt-oss-120b', 'gpt-oss-120b-medium', 'oss-120b'],
+    effort: 'medium',
+    isDefault: false,
+  },
   {
     id: 'gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
-    aliases: ['2.5-flash', 'flash', 'gemini-flash', 'gemini-2.5-flash'],
-    isDefault: true,
+    aliases: ['2.5-flash', 'gemini-2.5-flash'],
+    isDefault: false,
   },
   {
     id: 'gemini-2.5-pro',
@@ -26,7 +68,7 @@ export const FALLBACK_MODELS: ModelInfo[] = [
   {
     id: 'claude-3-7-sonnet',
     name: 'Claude 3.7 Sonnet',
-    aliases: ['claude-3.7', 'claude-3-7', 'claude-3.7-sonnet', 'claude-sonnet', 'sonnet'],
+    aliases: ['claude-3.7', 'claude-3-7', 'claude-3.7-sonnet'],
     isDefault: false,
   },
   {
@@ -48,27 +90,80 @@ export const FALLBACK_MODELS: ModelInfo[] = [
  */
 export function resolveModel(modelName?: string, effort?: string): string {
   if (!modelName) {
-    return 'gemini-2.5-flash';
+    return DEFAULT_MODEL_ID;
   }
 
   const trimmed = modelName.trim();
   const lower = trimmed.toLowerCase();
 
   if (lower === 'default') {
-    return 'gemini-2.5-flash';
+    return DEFAULT_MODEL_ID;
+  }
+
+  // Extract parenthesized effort/tier if present, e.g. "Gemini 3.8 Flash (High)"
+  let resolvedEffort = effort?.trim().toLowerCase();
+  const parenMatch = trimmed.match(/\(([^)]+)\)$/);
+  if (parenMatch && parenMatch[1]) {
+    const insideParen = parenMatch[1].trim().toLowerCase();
+    if (insideParen === 'high' || insideParen === 'medium' || insideParen === 'low') {
+      if (!resolvedEffort) {
+        resolvedEffort = insideParen;
+      }
+    }
   }
 
   // If already exact model with parenthesized effort/mode, resolve the prefix
   if (/\([^)]+\)$/.test(trimmed)) {
     const prefix = trimmed.replace(/\s*\([^)]+\)$/, '').trim();
-    return resolveModel(prefix, effort);
+    return resolveModel(prefix, resolvedEffort);
+  }
+
+  // Gemini 3.8 Flash explicit variants
+  if (
+    lower === 'gemini-3.8-flash-high' ||
+    lower === '3.8-flash-high' ||
+    lower === 'flash-high'
+  ) {
+    return 'gemini-3.8-flash-high';
   }
 
   if (
-    (lower.includes('2.5') && lower.includes('flash')) ||
-    lower === '2.5-flash' ||
+    lower === 'gemini-3.8-flash-low' ||
+    lower === '3.8-flash-low' ||
+    lower === 'flash-low'
+  ) {
+    return 'gemini-3.8-flash-low';
+  }
+
+  if (
+    lower === 'gemini-3.8-flash-medium' ||
+    lower === '3.8-flash-medium' ||
+    lower === 'flash-medium'
+  ) {
+    return 'gemini-3.8-flash-medium';
+  }
+
+  // Generic flash or 3.8 flash with effort routing
+  if (
+    (lower.includes('3.8') && lower.includes('flash')) ||
+    lower === '3.8-flash' ||
     lower === 'flash' ||
     lower === 'gemini-flash' ||
+    lower === 'gemini-3.8-flash'
+  ) {
+    if (resolvedEffort === 'high') {
+      return 'gemini-3.8-flash-high';
+    }
+    if (resolvedEffort === 'low') {
+      return 'gemini-3.8-flash-low';
+    }
+    return 'gemini-3.8-flash-medium';
+  }
+
+  // Legacy 2.5 flash and pro
+  if (
+    (lower.includes('2.5') && lower.includes('flash')) ||
+    lower === '2.5-flash' ||
     lower === 'gemini-2.5-flash'
   ) {
     return 'gemini-2.5-flash';
@@ -84,6 +179,7 @@ export function resolveModel(modelName?: string, effort?: string): string {
     return 'gemini-2.5-pro';
   }
 
+  // Claude Sonnet variants
   if (
     (lower.includes('3.7') && (lower.includes('sonnet') || lower.includes('claude'))) ||
     lower === 'claude-3.7' ||
@@ -104,10 +200,27 @@ export function resolveModel(modelName?: string, effort?: string): string {
     return 'claude-3-5-sonnet';
   }
 
-  if (lower.includes('sonnet') || lower.includes('claude-sonnet') || lower === 'sonnet') {
-    return 'claude-3-7-sonnet';
+  if (
+    lower.includes('sonnet') ||
+    lower.includes('claude-sonnet') ||
+    lower === 'sonnet' ||
+    lower === 'claude-sonnet-4-6' ||
+    lower === 'sonnet-4.6'
+  ) {
+    return 'claude-sonnet-4-6';
   }
 
+  // Claude Opus variants
+  if (lower.includes('opus') || lower === 'claude-opus-4-6-thinking') {
+    return 'claude-opus-4-6-thinking';
+  }
+
+  // GPT-OSS variants
+  if (lower.includes('oss') || lower === 'gpt-oss-120b-medium') {
+    return 'gpt-oss-120b-medium';
+  }
+
+  // GPT-4o
   if (lower.includes('4o') || lower === 'gpt-4o' || lower === '4o') {
     return 'gpt-4o';
   }
@@ -220,16 +333,19 @@ export function parseModelsOutput(output: string): ModelInfo[] {
     }
   }
 
-  // Determine default model: Default model line -> gemini-2.5-flash / Gemini 2.5 Flash -> first model
+  // Determine default model: Default model line -> gemini-3.8-flash-medium / candidates -> first model
   let defaultTarget = defaultModelId;
   if (!defaultTarget) {
     const defaultCandidates = [
+      'gemini-3.8-flash-medium',
+      'Gemini 3.8 Flash (Medium)',
+      'gemini-3.8-flash',
+      'gemini-3.8-flash-high',
+      'Gemini 3.8 Flash (High)',
       'gemini-2.5-flash',
       'Gemini 2.5 Flash',
-      'gemini-2.5-flash-high',
-      'gemini-2.5-pro',
-      'Gemini 2.5 Pro',
-      'claude-3-7-sonnet',
+      'claude-sonnet-4-6',
+      'Claude Sonnet 4.6 (Thinking)',
     ];
     for (const candidate of defaultCandidates) {
       if (

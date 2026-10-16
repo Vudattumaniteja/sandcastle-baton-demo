@@ -28,43 +28,61 @@ describe('packages/worker-runtime', () => {
   });
 
   describe('models entry point', () => {
-    it('should resolve models correctly with aliases and defaults', () => {
+    it('should resolve models correctly with aliases, effort tiers, and defaults', () => {
+      expect(resolveModel(undefined)).toBe('gemini-3.8-flash-medium');
+      expect(resolveModel('default')).toBe('gemini-3.8-flash-medium');
+      expect(resolveModel('flash')).toBe('gemini-3.8-flash-medium');
+      expect(resolveModel('flash', 'high')).toBe('gemini-3.8-flash-high');
+      expect(resolveModel('flash', 'low')).toBe('gemini-3.8-flash-low');
+      expect(resolveModel('gemini-3.8-flash-high')).toBe('gemini-3.8-flash-high');
+      expect(resolveModel('gemini-3.8-flash-medium')).toBe('gemini-3.8-flash-medium');
+      expect(resolveModel('Gemini 3.8 Flash (High)')).toBe('gemini-3.8-flash-high');
+      expect(resolveModel('Gemini 3.8 Flash (Medium)')).toBe('gemini-3.8-flash-medium');
+      expect(resolveModel('sonnet')).toBe('claude-sonnet-4-6');
+      expect(resolveModel('claude-sonnet')).toBe('claude-sonnet-4-6');
+      expect(resolveModel('Claude Sonnet 4.6 (Thinking)')).toBe('claude-sonnet-4-6');
+      expect(resolveModel('opus')).toBe('claude-opus-4-6-thinking');
+      expect(resolveModel('gpt-oss-120b-medium')).toBe('gpt-oss-120b-medium');
+      expect(resolveModel('oss')).toBe('gpt-oss-120b-medium');
+      // Backward compatibility
       expect(resolveModel('gemini-2.5-flash')).toBe('gemini-2.5-flash');
       expect(resolveModel('2.5-flash')).toBe('gemini-2.5-flash');
-      expect(resolveModel('flash')).toBe('gemini-2.5-flash');
       expect(resolveModel('gemini-2.5-pro')).toBe('gemini-2.5-pro');
       expect(resolveModel('pro')).toBe('gemini-2.5-pro');
       expect(resolveModel('claude-3.7')).toBe('claude-3-7-sonnet');
-      expect(resolveModel('claude-sonnet')).toBe('claude-3-7-sonnet');
       expect(resolveModel('claude-3.5')).toBe('claude-3-5-sonnet');
       expect(resolveModel('gpt-4o')).toBe('gpt-4o');
       expect(resolveModel('4o')).toBe('gpt-4o');
-      expect(resolveModel(undefined)).toBe('gemini-2.5-flash');
     });
 
     it('should parse models CLI output and mark default', () => {
-      const output = `Available models:
-  gemini-2.5-flash
-  gemini-2.5-pro
-  claude-3-7-sonnet
+      const output = `Fetching available models...
+gemini-3.8-flash-high\tGemini 3.8 Flash (High)
+gemini-3.8-flash-medium\tGemini 3.8 Flash (Medium)
+gemini-3.8-flash-low\tGemini 3.8 Flash (Low)
+claude-sonnet-4-6\tClaude Sonnet 4.6 (Thinking)
+claude-opus-4-6-thinking\tClaude Opus 4.6 (Thinking)
+gpt-oss-120b-medium\tGPT-OSS 120B (Medium)
 `;
       const models = parseModelsOutput(output);
-      expect(models.length).toBe(3);
-      expect(models[0].name).toBe('gemini-2.5-flash');
-      expect(models[0].isDefault).toBe(true);
-      expect(models[1].isDefault).toBe(false);
+      expect(models.length).toBe(6);
+      const medium = models.find((m) => m.id === 'gemini-3.8-flash-medium');
+      expect(medium).toBeDefined();
+      expect(medium?.isDefault).toBe(true);
+      const high = models.find((m) => m.id === 'gemini-3.8-flash-high');
+      expect(high?.isDefault).toBe(false);
     });
 
     it('should discover models via executor or return FALLBACK_MODELS on error', async () => {
       const mockExecutor = vi.fn().mockResolvedValue({
-        stdout: 'Available models:\n  gemini-2.5-flash\n',
+        stdout: 'Available models:\n  gemini-3.8-flash-medium\n',
         stderr: '',
         exitCode: 0,
       });
 
       const discovered = await discoverModels(1000, 'agy', mockExecutor);
       expect(discovered.length).toBe(1);
-      expect(discovered[0].name).toBe('gemini-2.5-flash');
+      expect(discovered[0].name).toBe('gemini-3.8-flash-medium');
 
       const failingExecutor = vi.fn().mockRejectedValue(new Error('CLI error'));
       const fallback = await discoverModels(1000, 'agy', failingExecutor);
