@@ -758,7 +758,7 @@ export class BatonOrchestrator extends EventEmitter {
           typeof l === 'string' ? l : l.name || ''
         ),
         parentIssue: nextParentInfo,
-        model: this.options.model ?? config.model ?? 'gemini-2.5-flash',
+        model: this.options.model ?? config.model ?? 'gemini-3.8-flash-medium',
         reasoningEffort:
           this.options.reasoningEffort ?? config.reasoningEffort ?? 'high',
         acceptanceCriteria: parseAcceptanceCriteria(nextIssue?.body || ''),

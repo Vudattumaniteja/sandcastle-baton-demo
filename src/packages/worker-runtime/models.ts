@@ -1,5 +1,6 @@
 import {
   ModelInfo,
+  DEFAULT_MODEL_ID,
   FALLBACK_MODELS,
   resolveModel,
   parseModelsOutput,
@@ -11,6 +12,7 @@ import {
 
 export {
   ModelInfo,
+  DEFAULT_MODEL_ID,
   FALLBACK_MODELS,
   resolveModel,
   parseModelsOutput,

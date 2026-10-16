@@ -104,7 +104,7 @@ export function assembleHandoffPayload(
     gatingStatus: next.gatingStatus ?? 'READY',
     labels: next.labels ?? [],
     parentIssue: next.parentIssue,
-    model: next.model ?? 'gemini-2.5-flash',
+    model: next.model ?? 'gemini-3.8-flash-medium',
     reasoningEffort: next.reasoningEffort ?? 'high',
     acceptanceCriteria,
     blockingDependencies: next.blockingDependencies ?? [],

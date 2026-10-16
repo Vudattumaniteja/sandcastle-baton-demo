@@ -68,7 +68,7 @@ export function renderWizardMode(state: BatonHandoffPayload): string {
     );
   }
 
-  const modelStr = next.model || 'gemini-2.5-flash';
+  const modelStr = next.model || 'gemini-3.8-flash-medium';
   const effortStr = next.reasoningEffort || 'high';
   lines.push(
     `${pc.cyan('│')}  ${pc.bold('Engine:')}     ${modelStr} (${effortStr} reasoning)`
@@ -211,7 +211,7 @@ export function renderRunMode(state: BatonHandoffPayload): string {
     );
   }
 
-  const modelStr = next.model || 'gemini-2.5-flash';
+  const modelStr = next.model || 'gemini-3.8-flash-medium';
   const effortStr = next.reasoningEffort || 'high';
   const estSeconds = next.estimatedDurationSeconds || 45;
   const configLine = `  ${pc.bold('Engine:')}     ${modelStr} (${effortStr} reasoning) • Est: ~${estSeconds}s`;
@@ -307,7 +307,7 @@ export function renderWatchMode(state: BatonHandoffPayload): string {
   } (${formatMs(completed.durationMs)}${prPart}${testPart})`;
   lines.push(padAnsi(lastLine, 72) + '│');
 
-  const modelStr = next.model || 'gemini-2.5-flash';
+  const modelStr = next.model || 'gemini-3.8-flash-medium';
   const effortStr = next.reasoningEffort || 'high';
   const nextLine = `│  ${pc.cyan('▶ Next Candidate:')}  Issue #${
     next.number
